@@ -11,6 +11,10 @@
 
 #define AVG_AREA 10
 
+//Blue seems to have generally rather low output values on the camera,
+//therefore we slightly increase the value to improve color recognition
+#define BLUE_CORRECTION_VALUE 1.5
+
 //semaphore
 static BSEMAPHORE_DECL(image_ready_sem, TRUE);
 static BSEMAPHORE_DECL(take_img_sem, TRUE);
@@ -30,7 +34,7 @@ static THD_FUNCTION(CaptureImage, arg) {
 	dcmi_prepare();
 
     while(1){
-    	//chBSemWait(&take_img_sem);
+    	chBSemWait(&take_img_sem);
         //starts a capture
 		dcmi_capture_start();
 		//waits for the capture to be done
@@ -98,8 +102,9 @@ static THD_FUNCTION(ProcessImage, arg) {
 			blue_mean += blue_image[i];
 		}
 		red_mean /= AVG_AREA;
-		blue_mean /= AVG_AREA;
 		green_mean /= AVG_AREA;
+		blue_mean /= AVG_AREA;
+		blue_mean *= BLUE_CORRECTION_VALUE;
 
 		chprintf((BaseSequentialStream *)&SD3, "RGB %d %d %d\n", red_mean, green_mean, blue_mean);
 
@@ -122,7 +127,6 @@ static THD_FUNCTION(ProcessImage, arg) {
     }
 }
 
-
 void process_image_start(void){
 	chThdCreateStatic(waProcessImage, sizeof(waProcessImage), NORMALPRIO, ProcessImage, NULL);
 	chThdCreateStatic(waCaptureImage, sizeof(waCaptureImage), NORMALPRIO, CaptureImage, NULL);
@@ -133,7 +137,11 @@ void take_image(void){
 	return;
 }
 
-uint8_t get_color(void)
-{
+uint8_t get_color(void){
 	return detected_color;
+}
+
+void reset_color(void){
+	detected_color = NO_COLOR;
+	return;
 }

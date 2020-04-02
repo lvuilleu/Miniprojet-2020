@@ -4,5 +4,6 @@
 void process_image_start(void);
 void take_image(void);
 uint8_t get_color(void);
+void reset_color(void);
 
 #endif

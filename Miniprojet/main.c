@@ -20,6 +20,14 @@
 
 #include <detect_color.h>
 
+
+void SendUint8ToComputer(uint8_t* data, uint16_t size)
+{
+	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)"START", 5);
+	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)&size, sizeof(uint16_t));
+	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)data, size);
+}
+
 static void serial_start(void)
 {
 	static SerialConfig ser_cfg = {
@@ -62,12 +70,12 @@ int main(void)
 
     /* Infinite loop. */
     while (1) {
-    	//take_image();
+    	take_image();
     	uint16_t dist = VL53L0X_get_dist_mm();
-    	//chprintf((BaseSequentialStream *)&SD3, "dist=%d mm\n", dist);
+    	chprintf((BaseSequentialStream *)&SD3, "dist=%d mm\n", dist);
         chThdSleepMilliseconds(1000);
-        //chprintf((BaseSequentialStream *)&SD3, "Colour=%d\n", get_color());
-        //chThdSleepMilliseconds(100);
+        chprintf((BaseSequentialStream *)&SD3, "Colour=%d\n", get_color());
+        chThdSleepMilliseconds(100);
     }
 }
 

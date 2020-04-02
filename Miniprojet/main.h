@@ -27,6 +27,7 @@ extern messagebus_t bus;
 
 extern parameter_namespace_t parameter_root;
 
+void SendUint8ToComputer(uint8_t* data, uint16_t size);
 
 
 #endif /* MAIN_H_ */
