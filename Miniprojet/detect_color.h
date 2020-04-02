@@ -6,4 +6,6 @@ void take_image(void);
 uint8_t get_color(void);
 void reset_color(void);
 
+void process_led_start(void);
+
 #endif

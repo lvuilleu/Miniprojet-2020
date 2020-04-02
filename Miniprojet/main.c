@@ -61,12 +61,9 @@ int main(void)
 	VL53L0X_start();
 	//Start SPI comm for RGB control
 	spi_comm_start();
+	process_led_start();
 
 	clear_leds();
-	set_rgb_led(LED2, 0,100,100);
-	set_rgb_led(LED4, 100,100,0);
-	set_rgb_led(LED6, 100,0,0);
-	set_rgb_led(LED8, 100,0,100);
 
     /* Infinite loop. */
     while (1) {

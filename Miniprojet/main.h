@@ -19,7 +19,8 @@ typedef enum{
 	NO_COLOR,
 	RED,
 	GREEN,
-	BLUE
+	BLUE,
+	NB_COLOR
 } Colors_detected;
 
 /** Robot wide IPC bus. */

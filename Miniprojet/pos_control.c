@@ -118,6 +118,6 @@ static THD_FUNCTION(PosControl, arg) {
 void pos_control_start(void){
 	chThdCreateStatic(waPosControl, sizeof(waPosControl), NORMALPRIO + 1, PosControl, NULL);
 
-	motors_init();
+	//motors_init(); schon im main
 }
 
