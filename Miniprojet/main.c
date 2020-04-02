@@ -1,9 +1,4 @@
-/*
- * main.c
- *
- *  Created on: 31.03.2020
- *      Author: Tim Bürgel
- */
+//chprintf((BaseSequentialStream *)&SDU1, "dist=%d mm\n", dist);
 
 
 #include <stdio.h>
@@ -19,9 +14,11 @@
 #include <motors.h>
 #include <camera/po8030.h>
 #include <chprintf.h>
+#include <sensors/VL53L0X/VL53L0X.h>
+#include <leds.h>
+#include <spi_comm.h>
 
-
-
+#include <detect_color.h>
 
 static void serial_start(void)
 {
@@ -49,13 +46,28 @@ int main(void)
     //starts the camera
     dcmi_start();
 	po8030_start();
+	process_image_start();
 	//inits the motors
 	motors_init();
+	//Inits the TOF sensor
+	VL53L0X_start();
+	//Start SPI comm for RGB control
+	spi_comm_start();
+
+	clear_leds();
+	set_rgb_led(LED2, 0,100,100);
+	set_rgb_led(LED4, 100,100,0);
+	set_rgb_led(LED6, 100,0,0);
+	set_rgb_led(LED8, 100,0,100);
 
     /* Infinite loop. */
     while (1) {
-    	//waits 1 second
+    	//take_image();
+    	uint16_t dist = VL53L0X_get_dist_mm();
+    	//chprintf((BaseSequentialStream *)&SD3, "dist=%d mm\n", dist);
         chThdSleepMilliseconds(1000);
+        //chprintf((BaseSequentialStream *)&SD3, "Colour=%d\n", get_color());
+        //chThdSleepMilliseconds(100);
     }
 }
 

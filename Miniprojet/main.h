@@ -12,6 +12,15 @@
 #include "msgbus/messagebus.h"
 #include "parameter/parameter.h"
 
+//Size of camera array
+#define IMAGE_BUFFER_SIZE		640
+
+typedef enum{
+	NO_COLOR,
+	RED,
+	GREEN,
+	BLUE
+} Colors_detected;
 
 /** Robot wide IPC bus. */
 extern messagebus_t bus;
