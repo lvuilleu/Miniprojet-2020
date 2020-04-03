@@ -14,14 +14,20 @@
 
 typedef enum {
 	SCAN,
-	APPR_BARREL,
+	APPROACH,
 	DETECT_COLOR,
 	SIDESTEP,
 	POSITIONING,
 	TOUCH,
 	PUSH,
-	HOME
+	HOME,
 } states;
+
+typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_direction
+	STRAIGHT,
+	ROTATION,
+	STOP,
+} motors_states;
 
 #define PI                  3.1415926536f // or M_PI from math.h
 #define WHEEL_DISTANCE      5.45f    //cm
@@ -31,23 +37,39 @@ typedef enum {
 #define PERIOD				10 // 100 Hz
 #define SCAN_DIST			5000 // mm
 #define TOUCH_DIST			30 // mm
+#define ROTATION_SPEED		500 // steps/s
+#define STRAIGHT_SPEED		500 // steps/s
+#define ANGLE_TOLERANCE		0.01 // -> 0.57°
+#define SIDESTEPS			1000
 
 
-//evtl. move these into the thread
-static float robot_angle = 0.; // in radiants
-static uint8_t state = SCAN;
-static int32_t appr_steps = 0;
-
-
-
-void save_appr_steps(void){
-	appr_steps = (left_motor_get_pos() + right_motor_get_pos()) / 2; // int/int!
+int32_t save_appr_steps(void){
+	int32_t appr_steps = (left_motor_get_pos() + right_motor_get_pos()) / 2; // int/int!
 	left_motor_set_pos(appr_steps);
 	right_motor_set_pos(appr_steps);
+	return appr_steps;
 }
 
-void get_angle(void){
-	robot_angle = (right_motor_get_pos() - appr_steps)/PERIMETER_EPUCK*NSTEP_ONE_TURN*2*PI;
+float get_angle(int32_t appr_steps){
+	float r_angle = (right_motor_get_pos() - appr_steps)*2*WHEEL_PERIMETER/(WHEEL_DISTANCE*NSTEP_ONE_TURN);
+	return r_angle;
+}
+
+void set_motors(uint8_t motors_state, int speed){
+	switch(motors_state){
+		case STRAIGHT:
+			right_motor_set_speed(speed);
+			left_motor_set_speed(speed);
+			break;
+		case ROTATION:
+			right_motor_set_speed(speed);
+			left_motor_set_speed(-speed);
+			break;
+		default:
+			right_motor_set_speed(0);
+			left_motor_set_speed(0);
+
+	}
 }
 
 
@@ -57,6 +79,12 @@ static THD_FUNCTION(PosControl, arg) {
     chRegSetThreadName(__FUNCTION__);
     (void)arg;
 
+    systime_t time;
+    static float robot_angle = 0.; // in radiants
+    static uint8_t state = SCAN;
+    static int32_t appr_steps = 0;
+    static int scan_speed = ROTATION_SPEED;
+
     while(1)
     {
     		time = chVTGetSystemTime();
@@ -64,34 +92,64 @@ static THD_FUNCTION(PosControl, arg) {
     			case SCAN:
     				if(VL53L0X_get_dist_mm() < SCAN_DIST)
     				{
-    					state = APPR_BARREL;
-    					save_appr_steps();
+    					robot_angle += get_angle(appr_steps);
+    					appr_steps = save_appr_steps();
+    					state = APPROACH;
     				}
     				else
     				{
-    					// scanning movement and save angle
+    					float angle = get_angle(appr_steps) + robot_angle;
+    					if(angle > PI/2.)
+    					{
+    						scan_speed = -ROTATION_SPEED;
+    					}
+    					if(angle <= 0)
+    					{
+    						scan_speed = ROTATION_SPEED;
+    					}
+    					set_motors(ROTATION, scan_speed);
     				}
 				break;
-			case APPR_BARREL:
+
+
+			case APPROACH:
 				if(VL53L0X_get_dist_mm() < TOUCH_DIST)
 				{
+					set_motors(STOP, 0);
 					state = DETECT_COLOR;
-					save_appr_steps();
+					appr_steps = save_appr_steps();
+					left_motor_set_pos(0);  //
+					right_motor_set_pos(0); // evtl. reset function
 				}
 				else if(VL53L0X_get_dist_mm() > SCAN_DIST)
 				{
+					set_motors(STOP, 0);
 					state = SCAN;
-					save_appr_steps();
+					appr_steps = save_appr_steps();
 				}
 				else
 				{
-					// move forward
+					set_motors(STRAIGHT, STRAIGHT_SPEED);
 				}
 				break;
 			case DETECT_COLOR:
 
 				break;
-			case SIDESTEP:
+			case SIDESTEP:; //unschön aber süsch geis ni, evtl angle am afang vom thread definiere
+				float angle = get_angle(appr_steps) + robot_angle;
+				if(angle > ANGLE_TOLERANCE)
+					set_motors(ROTATION, -ROTATION_SPEED);
+				else if(angle < -ANGLE_TOLERANCE)
+					set_motors(ROTATION, ROTATION_SPEED);
+				else if(left_motor_get_pos() < SIDESTEPS)
+					set_motors(STRAIGHT, STRAIGHT_SPEED);
+				else
+				{
+					set_motors(STOP, 0);
+					left_motor_set_pos(0); //
+					right_motor_set_pos(0);//
+					state = POSITIONING;
+				}
 
 				break;
 			case POSITIONING:
@@ -107,7 +165,7 @@ static THD_FUNCTION(PosControl, arg) {
 
 				break;
 			default:
-
+				;
     		}
 
 		chThdSleepUntilWindowed(time, time + MS2ST(PERIOD));
@@ -118,6 +176,6 @@ static THD_FUNCTION(PosControl, arg) {
 void pos_control_start(void){
 	chThdCreateStatic(waPosControl, sizeof(waPosControl), NORMALPRIO + 1, PosControl, NULL);
 
-	//motors_init(); schon im main
+	motors_init();
 }
 

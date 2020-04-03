@@ -19,6 +19,7 @@
 #include <spi_comm.h>
 
 #include <detect_color.h>
+#include <pos_control.h>
 
 
 void SendUint8ToComputer(uint8_t* data, uint16_t size)
@@ -55,10 +56,10 @@ int main(void)
     dcmi_start();
 	po8030_start();
 	process_image_start();
-	//inits the motors
-	motors_init();
 	//Inits the TOF sensor
 	VL53L0X_start();
+	//init pos_control
+	pos_control_start();
 	//Start SPI comm for RGB control
 	spi_comm_start();
 	process_led_start();
@@ -67,9 +68,9 @@ int main(void)
 
     /* Infinite loop. */
     while (1) {
-    	take_image();
-    	uint16_t dist = VL53L0X_get_dist_mm();
-    	chprintf((BaseSequentialStream *)&SD3, "dist=%d mm\n", dist);
+    		take_image();
+    		uint16_t dist = VL53L0X_get_dist_mm();
+    		chprintf((BaseSequentialStream *)&SD3, "dist=%d mm\n", dist);
         chThdSleepMilliseconds(1000);
         chprintf((BaseSequentialStream *)&SD3, "Colour=%d\n", get_color());
         chThdSleepMilliseconds(100);
