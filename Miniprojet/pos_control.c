@@ -11,6 +11,7 @@
 #include <pos_control.h>
 #include <motors.h>
 #include <sensors/VL53L0X/VL53L0X.h>
+#include <detect_color.h>
 
 typedef enum {
 	SCAN,
@@ -35,7 +36,7 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define NSTEP_ONE_TURN      1000 // number of step for 1 turn of the motor
 #define WHEEL_PERIMETER     13 // [cm]
 #define PERIOD				10 // 100 Hz
-#define SCAN_DIST			5000 // mm
+#define SCAN_DIST			5000 // mm Das isch sehr wohrschinli zviel, so gross isch nis zimmer niid ;)
 #define TOUCH_DIST			30 // mm
 #define ROTATION_SPEED		500 // steps/s
 #define STRAIGHT_SPEED		500 // steps/s
@@ -51,7 +52,7 @@ int32_t save_appr_steps(void){
 }
 
 float get_angle(int32_t appr_steps){
-	float r_angle = (right_motor_get_pos() - appr_steps)*2*WHEEL_PERIMETER/(WHEEL_DISTANCE*NSTEP_ONE_TURN);
+	float r_angle = (right_motor_get_pos() - appr_steps)*2*WHEEL_PERIMETER/(WHEEL_DISTANCE*NSTEP_ONE_TURN); //TYPECASTING sust hemmr wohrschinli rundigsfehler
 	return r_angle;
 }
 
@@ -65,7 +66,7 @@ void set_motors(uint8_t motors_state, int speed){
 			right_motor_set_speed(speed);
 			left_motor_set_speed(-speed);
 			break;
-		default:
+		case STOP: // isch chli schöner als default findi, odr hetts do e überlegig dehinter gha?
 			right_motor_set_speed(0);
 			left_motor_set_speed(0);
 
@@ -133,6 +134,9 @@ static THD_FUNCTION(PosControl, arg) {
 				}
 				break;
 			case DETECT_COLOR:
+				// teste wo dr zylinder im vrgliich zur kamera isch, wohrschinli jo eher links denn chönne mr niid die zentrale pixel uslese sondern bruuche en offset
+				take_image();
+				//Jetzt gohts en moment bis s bild fertig isch, entweder warte odr scho losfahre abr denn hemmr s risiko dass s bild verwacklet/ am falsche ort misst
 
 				break;
 			case SIDESTEP:; //unschÃ¶n aber sÃ¼sch geis ni, evtl angle am afang vom thread definiere
@@ -176,6 +180,6 @@ static THD_FUNCTION(PosControl, arg) {
 void pos_control_start(void){
 	chThdCreateStatic(waPosControl, sizeof(waPosControl), NORMALPRIO + 1, PosControl, NULL);
 
-	motors_init();
+	//motors_init();
 }
 
