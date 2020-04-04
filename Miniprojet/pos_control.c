@@ -8,12 +8,17 @@
 #include "ch.h"
 #include "hal.h"
 
+
 #include <pos_control.h>
 #include <motors.h>
 #include <sensors/VL53L0X/VL53L0X.h>
 #include <detect_color.h>
+#include <selector.h>
+
+#include <chprintf.h> //DEBUG ONLY
 
 typedef enum {
+	WAIT,
 	SCAN,
 	APPROACH,
 	DETECT_COLOR,
@@ -35,11 +40,12 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define PERIMETER_EPUCK     (PI * WHEEL_DISTANCE)
 #define NSTEP_ONE_TURN      1000 // number of step for 1 turn of the motor
 #define WHEEL_PERIMETER     13 // [cm]
-#define PERIOD				10 // 100 Hz
-#define SCAN_DIST			5000 // mm Das isch sehr wohrschinli zviel, so gross isch nis zimmer niid ;)
-#define TOUCH_DIST			30 // mm
+#define PERIOD				50 // 20 Hz
+#define SCAN_DIST			1000 // mm
+#define TOUCH_DIST			150 // mm
 #define ROTATION_SPEED		500 // steps/s
 #define STRAIGHT_SPEED		500 // steps/s
+#define SCAN_SPEED			100 //steps/s
 #define ANGLE_TOLERANCE		0.01 // -> 0.57°
 #define SIDESTEPS			1000
 
@@ -82,14 +88,35 @@ static THD_FUNCTION(PosControl, arg) {
 
     systime_t time;
     static float robot_angle = 0.; // in radiants
-    static uint8_t state = SCAN;
+    static uint8_t state = WAIT;
     static int32_t appr_steps = 0;
     static int scan_speed = ROTATION_SPEED;
+    static uint8_t old_state = 10; // FOR DEBUG ONLY
 
     while(1)
     {
     		time = chVTGetSystemTime();
+
+    		if(get_selector() > 8 && state == WAIT)
+    			state = SCAN;
+    		if(get_selector() < 8)
+    			state = WAIT;
+
+    		//DEBUG ONLY
+    		if(state != old_state)
+    		{
+    			chprintf((BaseSequentialStream *)&SD3, "state = %d\n", state);
+    			old_state = state;
+    		}
+    		//Until HERE
+
     		switch(state) {
+				case WAIT:
+					set_motors(STOP, 0);
+					robot_angle = 0;
+					appr_steps = 0;
+					break;
+
     			case SCAN:
     				if(VL53L0X_get_dist_mm() < SCAN_DIST)
     				{
@@ -102,11 +129,11 @@ static THD_FUNCTION(PosControl, arg) {
     					float angle = get_angle(appr_steps) + robot_angle;
     					if(angle > PI/2.)
     					{
-    						scan_speed = -ROTATION_SPEED;
+    						scan_speed = -SCAN_SPEED;
     					}
     					if(angle <= 0)
     					{
-    						scan_speed = ROTATION_SPEED;
+    						scan_speed = SCAN_SPEED;
     					}
     					set_motors(ROTATION, scan_speed);
     				}
@@ -137,7 +164,7 @@ static THD_FUNCTION(PosControl, arg) {
 				// teste wo dr zylinder im vrgliich zur kamera isch, wohrschinli jo eher links denn ch�nne mr niid die zentrale pixel uslese sondern bruuche en offset
 				take_image();
 				//Jetzt gohts en moment bis s bild fertig isch, entweder warte odr scho losfahre abr denn hemmr s risiko dass s bild verwacklet/ am falsche ort misst
-
+				state = SIDESTEP;
 				break;
 			case SIDESTEP:; //unschön aber süsch geis ni, evtl angle am afang vom thread definiere
 				float angle = get_angle(appr_steps) + robot_angle;

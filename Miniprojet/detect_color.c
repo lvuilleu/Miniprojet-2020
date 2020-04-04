@@ -53,7 +53,7 @@ static THD_FUNCTION(CaptureImage, arg) {
     }
 }
 
-static THD_WORKING_AREA(waProcessImage, 1024);
+static THD_WORKING_AREA(waProcessImage, 512);
 static THD_FUNCTION(ProcessImage, arg) {
 
     chRegSetThreadName(__FUNCTION__);
@@ -75,7 +75,8 @@ static THD_FUNCTION(ProcessImage, arg) {
 		for(int i = 0; i < AVG_AREA; i++)
 		{
 			uint8_t temp = 0;
-			temp = *(img_buff_ptr+2*i+IMAGE_BUFFER_SIZE-AVG_AREA);
+			//temp = *(img_buff_ptr+2*i+IMAGE_BUFFER_SIZE-AVG_AREA);
+			temp = *(img_buff_ptr+2*i+IMAGE_BUFFER_SIZE/2);
 			temp &= 0b11111000;
 			temp = temp>>3;
 			red_image[i] = temp;
@@ -84,18 +85,21 @@ static THD_FUNCTION(ProcessImage, arg) {
 		for(int i = 0; i < AVG_AREA; i++)
 		{
 			uint8_t temp = 0;
-			temp = *(img_buff_ptr+2*i+IMAGE_BUFFER_SIZE-AVG_AREA);
+			//temp = *(img_buff_ptr+2*i+IMAGE_BUFFER_SIZE-AVG_AREA);
+			temp = *(img_buff_ptr+2*i+IMAGE_BUFFER_SIZE/2);
 			temp &= 0b00000111;
 			temp = temp<<3;
 
-			temp |= ((*(img_buff_ptr+2*i+1+IMAGE_BUFFER_SIZE-AVG_AREA)>>5) & 0b00000111);
+			//temp |= ((*(img_buff_ptr+2*i+1+IMAGE_BUFFER_SIZE-AVG_AREA)>>5) & 0b00000111);
+			temp |= ((*(img_buff_ptr+2*i+1+IMAGE_BUFFER_SIZE/2)>>5) & 0b00000111);
 			green_image[i] = temp;
 		}
 		//Blue Values
 		for(int i = 0; i < AVG_AREA; i++)
 		{
 			uint8_t temp = 0;
-			temp = *(img_buff_ptr+2*i+1+IMAGE_BUFFER_SIZE-AVG_AREA);
+			//temp = *(img_buff_ptr+2*i+1+IMAGE_BUFFER_SIZE-AVG_AREA);
+			temp = *(img_buff_ptr+2*i+1+IMAGE_BUFFER_SIZE/2);
 			temp &= 0b00011111;
 			blue_image[i] = temp;
 		}

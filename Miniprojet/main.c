@@ -50,16 +50,22 @@ int main(void)
 
     //starts the serial communication
     serial_start();
+
     //start the USB communication
     usb_start();
+
     //starts the camera
     dcmi_start();
 	po8030_start();
 	process_image_start();
+
 	//Inits the TOF sensor
 	VL53L0X_start();
+
 	//init pos_control
+	motors_init();
 	pos_control_start();
+
 	//Start SPI comm for RGB control
 	spi_comm_start();
 	process_led_start();
@@ -68,12 +74,12 @@ int main(void)
 
     /* Infinite loop. */
     while (1) {
-    		take_image();
-    		uint16_t dist = VL53L0X_get_dist_mm();
-    		chprintf((BaseSequentialStream *)&SD3, "dist=%d mm\n", dist);
+    	//take_image();
+    	uint16_t dist = VL53L0X_get_dist_mm();
+    	chprintf((BaseSequentialStream *)&SD3, "dist=%d mm\n", dist);
         chThdSleepMilliseconds(1000);
-        chprintf((BaseSequentialStream *)&SD3, "Colour=%d\n", get_color());
-        chThdSleepMilliseconds(100);
+        //chprintf((BaseSequentialStream *)&SD3, "Colour=%d\n", get_color());
+        //chThdSleepMilliseconds(100);
     }
 }
 
