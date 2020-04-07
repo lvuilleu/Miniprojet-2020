@@ -35,11 +35,12 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 	STOP,
 } motors_states;
 
-#define PI                  3.1415926536f // or M_PI from math.h
-#define WHEEL_DISTANCE      5.45f    //cm
-#define PERIMETER_EPUCK     (PI * WHEEL_DISTANCE)
-#define NSTEP_ONE_TURN      1000 // number of step for 1 turn of the motor
-#define WHEEL_PERIMETER     13 // [cm]
+#define DEBUG				1
+#define PI					3.1415926536f // or M_PI from math.h
+#define WHEEL_DISTANCE		5.45f    //cm
+#define PERIMETER_EPUCK		(PI * WHEEL_DISTANCE)
+#define NSTEP_ONE_TURN		1000 // number of step for 1 turn of the motor
+#define WHEEL_PERIMETER		13 // [cm]
 #define PERIOD				50 // 20 Hz
 #define SCAN_DIST			1000 // mm
 #define TOUCH_DIST			150 // mm
@@ -47,9 +48,9 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define STRAIGHT_SPEED		500 // steps/s
 #define SCAN_SPEED			100 //steps/s
 #define ANGLE_TOLERANCE		0.01 // -> 0.57°
-#define SIDESTEPS			1000
+#define SIDESTEP_DIST		100 // mm
 
-static uint16_t pos_x = 0; 	//mm
+static uint16_t pos_x = 0; 	//mm evtl. signed
 static uint16_t pos_y = 0; 	//mm
 static float angle = 0;		//rad
 
@@ -75,7 +76,7 @@ void set_motors(uint8_t motors_state, int speed){
 			right_motor_set_speed(speed);
 			left_motor_set_speed(-speed);
 			break;
-		case STOP: // isch chli sch�ner als default findi, odr hetts do e �berlegig dehinter gha?
+		case STOP: // isch chli sch�ner als default findi, odr hetts do e �berlegig dehinter gha?
 			right_motor_set_speed(0);
 			left_motor_set_speed(0);
 
@@ -86,6 +87,12 @@ void new_coord_and_angle(void){
 
 }
 
+void calculate_target_pos(void) {
+	// berechnet d position vom zylinder wemer gnue nach si
+	// wird grad vorem DETECT_COLOR ufgrüefe
+	// söt ähnlech zu new_coord_and_angle() si
+}
+
 static THD_WORKING_AREA(waPosControl, 256);
 static THD_FUNCTION(PosControl, arg) {
 
@@ -93,11 +100,12 @@ static THD_FUNCTION(PosControl, arg) {
     (void)arg;
 
     systime_t time;
-    static float robot_angle = 0.; // in radiants
     static uint8_t state = WAIT;
-    static int32_t appr_steps = 0;
     static int scan_speed = ROTATION_SPEED;
-    static uint8_t old_state = 10; // FOR DEBUG ONLY
+    static uint8_t old_state = 10;
+
+    static uint16_t y_target = 0;
+    static uint16_t x_target = 0;
 
     while(1)
     {
@@ -106,96 +114,95 @@ static THD_FUNCTION(PosControl, arg) {
     		//Calculate new position
     		new_coord_and_angle();
 
-
     		if(get_selector() > 8 && state == WAIT)
     			state = SCAN;
     		if(get_selector() < 8)
     			state = WAIT;
 
-    		//DEBUG ONLY
-    		if(state != old_state)
+    		if(DEBUG)
     		{
-    			chprintf((BaseSequentialStream *)&SD3, "state = %d\n", state);
-    			old_state = state;
+			if(state != old_state)
+			{
+				chprintf((BaseSequentialStream *)&SD3, "state = %d\n", state);
+				old_state = state;
+			}
     		}
-    		//Until HERE
 
     		switch(state) {
-				case WAIT:
-					set_motors(STOP, 0);
-					robot_angle = 0;
-					appr_steps = 0;
-					break;
+			case WAIT:
+				set_motors(STOP, 0);
+				break;
 
     			case SCAN:
     				if(VL53L0X_get_dist_mm() < SCAN_DIST)
     				{
-    					robot_angle += get_angle(appr_steps);
-    					appr_steps = save_appr_steps();
     					state = APPROACH;
     				}
     				else
     				{
-    					float angle = get_angle(appr_steps) + robot_angle;
     					if(angle > PI/2.)
-    					{
     						scan_speed = -SCAN_SPEED;
-    					}
     					if(angle <= 0)
-    					{
     						scan_speed = SCAN_SPEED;
-    					}
     					set_motors(ROTATION, scan_speed);
     				}
 				break;
-
 
 			case APPROACH:
 				if(VL53L0X_get_dist_mm() < TOUCH_DIST)
 				{
 					set_motors(STOP, 0);
+					calculate_target_pos(); // muess no implementiert wärde
 					state = DETECT_COLOR;
-					appr_steps = save_appr_steps();
-					left_motor_set_pos(0);  //
-					right_motor_set_pos(0); // evtl. reset function
 				}
 				else if(VL53L0X_get_dist_mm() > SCAN_DIST)
 				{
 					set_motors(STOP, 0);
 					state = SCAN;
-					appr_steps = save_appr_steps();
 				}
 				else
-				{
 					set_motors(STRAIGHT, STRAIGHT_SPEED);
-				}
+
 				break;
 			case DETECT_COLOR:
-				// teste wo dr zylinder im vrgliich zur kamera isch, wohrschinli jo eher links denn ch�nne mr niid die zentrale pixel uslese sondern bruuche en offset
+				// teste wo dr zylinder im vrgliich zur kamera isch, wohrschinli jo eher links denn ch�nne mr niid die zentrale pixel uslese sondern bruuche en offset
 				take_image();
 				//Jetzt gohts en moment bis s bild fertig isch, entweder warte odr scho losfahre abr denn hemmr s risiko dass s bild verwacklet/ am falsche ort misst
 				state = SIDESTEP;
+				y_target = pos_y + SIDESTEP_DIST;
 				break;
-			case SIDESTEP:; //unschön aber süsch geis ni, evtl angle am afang vom thread definiere
-				float angle = get_angle(appr_steps) + robot_angle;
+			case SIDESTEP:
+				// evtl. ds ganze ine funktion wird denn aber gloubs kompliziert
 				if(angle > ANGLE_TOLERANCE)
 					set_motors(ROTATION, -ROTATION_SPEED);
 				else if(angle < -ANGLE_TOLERANCE)
 					set_motors(ROTATION, ROTATION_SPEED);
-				else if(left_motor_get_pos() < SIDESTEPS)
-					set_motors(STRAIGHT, STRAIGHT_SPEED);
-				else
+				else if(pos_y >= y_target)
 				{
 					set_motors(STOP, 0);
-					left_motor_set_pos(0); //
-					right_motor_set_pos(0);//
+					y_target = 0;		// nid unbedingt nötig
+					x_target = pos_x + SIDESTEP_DIST;
 					state = POSITIONING;
 				}
-
+				else
+					set_motors(STRAIGHT, STRAIGHT_SPEED);
 				break;
+
 			case POSITIONING:
-
+				if(angle > PI/2. + ANGLE_TOLERANCE)
+					set_motors(ROTATION, -ROTATION_SPEED);
+				else if(angle < PI/2. - ANGLE_TOLERANCE)
+					set_motors(ROTATION, ROTATION_SPEED);
+				else if(pos_x >= x_target)
+				{
+					set_motors(STOP, 0);
+					x_target = 0;		// nid unbedingt nötig
+					state = TOUCH;
+				}
+				else
+					set_motors(STRAIGHT, STRAIGHT_SPEED);
 				break;
+
 			case TOUCH:
 
 				break;
@@ -215,7 +222,7 @@ static THD_FUNCTION(PosControl, arg) {
 }
 
 void pos_control_start(void){
-	chThdCreateStatic(waPosControl, sizeof(waPosControl), NORMALPRIO + 1, PosControl, NULL);
+	chThdCreateStatic(waPosControl, sizeof(waPosControl), NORMALPRIO + 1, PosControl, NULL); // priorität apasse
 
 	//motors_init();
 }
