@@ -42,19 +42,19 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define WHEEL_DISTANCE		5.45f    //cm
 #define PERIMETER_EPUCK		(PI * WHEEL_DISTANCE)
 #define NSTEP_ONE_TURN		1000 // number of step for 1 turn of the motor
-#define WHEEL_PERIMETER		13 // [cm]
-#define PERIOD				50 // 20 Hz
+#define WHEEL_PERIMETER		(PI*4.25) // [cm]
+#define PERIOD				10 // 100 Hz
 #define SCAN_DIST			1000 // mm
 #define TOUCH_DIST			150 // mm
 #define ROTATION_SPEED		500 // steps/s
 #define STRAIGHT_SPEED		500 // steps/s
-#define SCAN_SPEED			100 //steps/s
+#define SCAN_SPEED			200 //steps/s
 #define ANGLE_TOLERANCE		0.01 // -> 0.57Â°
 #define SIDESTEP_DIST		100 // mm
 
 struct robot_t{
-	float pos_x; //Ich ha chli angst vor relativ grosse rundigsfehler wenn mir die position all 50ms update chönnt sich das evlt recht uffeaddiere...
-	float pos_y; //Drumm float
+	float pos_x;
+	float pos_y;
 	float angle;
 	uint8_t motor_state;
 };
@@ -67,7 +67,6 @@ static struct robot_t robot;
 	right_motor_set_pos(appr_steps);
 	return appr_steps;
 }*/
-//Comment
 
 float get_angle(void){
 	return ((float)(right_motor_get_pos()*2*WHEEL_PERIMETER)/(float)(WHEEL_DISTANCE*NSTEP_ONE_TURN));
@@ -99,15 +98,15 @@ void new_coord_and_angle(void){
 		robot.angle += get_angle();
 		break;
 	case STRAIGHT: ;
-		uint8_t distance= right_motor_get_pos()/NSTEP_ONE_TURN*WHEEL_PERIMETER;
+		float distance= ((float)right_motor_get_pos())/((float)NSTEP_ONE_TURN)*WHEEL_PERIMETER; //Huge errors if we use int due to rounding errors
 		robot.pos_y += cos(robot.angle)*distance;
 		robot.pos_x += sin(robot.angle)*distance;
 		break;
 	case STOP:
 		break;
+	}
 	right_motor_set_pos(0);
 	left_motor_set_pos(0);
-	}
 }
 
 void calculate_target_pos(void) {
@@ -124,12 +123,12 @@ static THD_FUNCTION(PosControl, arg) {
 
     systime_t time;
     static uint8_t state = WAIT;
-    static int scan_speed = ROTATION_SPEED;
-    static uint8_t old_state = 10;
+    static int scan_speed = SCAN_SPEED;
 
     static uint16_t y_target = 0;
     static uint16_t x_target = 0;
 
+    //Robot init
     robot.pos_x = 0;
     robot.pos_y = 0;
     robot.angle = 0;
@@ -142,17 +141,27 @@ static THD_FUNCTION(PosControl, arg) {
     		if(get_selector() > 8 && state == WAIT)
     			state = SCAN;
     		if(get_selector() < 8)
+    		{
     			state = WAIT;
+    			robot.pos_x = 0;
+				robot.pos_y = 0;
+				robot.angle = 0;
+				robot.motor_state = STOP;
+				scan_speed = SCAN_SPEED;
+				reset_color();
+    		}
+
 
     		//Calculate new position
 			new_coord_and_angle();
 
     		if(DEBUG)
     		{
-				if(state != old_state)
+    			static systime_t oldtime= 0;
+				if((robot.angle || robot.pos_x || robot.pos_y) && time > oldtime+1e3)
 				{
-					chprintf((BaseSequentialStream *)&SD3, "state = %d\n", state);
-					old_state = state;
+					chprintf((BaseSequentialStream *)&SD3, "state = %d, angle = %f, pos_x = %f, pos_y = %f\n", state, robot.angle, robot.pos_x, robot.pos_y);
+					oldtime = time;
 				}
     		}
 
@@ -170,7 +179,7 @@ static THD_FUNCTION(PosControl, arg) {
     				{
     					if(robot.angle > PI/2.)
     						scan_speed = -SCAN_SPEED;
-    					if(robot.angle <= 0)
+    					if(robot.angle < 0)
     						scan_speed = SCAN_SPEED;
     					set_motors(ROTATION, scan_speed);
     				}
