@@ -39,10 +39,10 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 
 #define DEBUG				1
 #define PI					3.1415926536f // or M_PI from math.h
-#define WHEEL_DISTANCE		5.45f    //cm
+#define WHEEL_DISTANCE		54.5f    //mm
 #define PERIMETER_EPUCK		(PI * WHEEL_DISTANCE)
 #define NSTEP_ONE_TURN		1000 // number of step for 1 turn of the motor
-#define WHEEL_PERIMETER		(PI*4.25) // [cm]
+#define WHEEL_PERIMETER		(PI*42.5) // [mm]
 #define PERIOD				10 // 100 Hz
 #define SCAN_DIST			1000 // mm
 #define TOUCH_DIST			150 // mm
@@ -201,12 +201,14 @@ static THD_FUNCTION(PosControl, arg) {
 					set_motors(STRAIGHT, STRAIGHT_SPEED);
 
 				break;
+
 			case DETECT_COLOR:
 				// teste wo dr zylinder im vrgliich zur kamera isch, wohrschinli jo eher links denn ch�nne mr niid die zentrale pixel uslese sondern bruuche en offset
 				take_image();
 				state = SIDESTEP;
 				y_target = robot.pos_y + SIDESTEP_DIST;
 				break;
+
 			case SIDESTEP:
 				// evtl. ds ganze ine funktion wird denn aber gloubs kompliziert
 				if(robot.angle > ANGLE_TOLERANCE)
@@ -259,7 +261,5 @@ static THD_FUNCTION(PosControl, arg) {
 
 void pos_control_start(void){
 	chThdCreateStatic(waPosControl, sizeof(waPosControl), NORMALPRIO + 1, PosControl, NULL); // priorität apasse
-
-	//motors_init();
 }
 
