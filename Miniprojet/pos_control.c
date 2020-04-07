@@ -50,9 +50,14 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define ANGLE_TOLERANCE		0.01 // -> 0.57°
 #define SIDESTEP_DIST		100 // mm
 
-static uint16_t pos_x = 0; 	//mm evtl. signed
-static uint16_t pos_y = 0; 	//mm
-static float angle = 0;		//rad
+struct robot_t{
+	int16_t pos_x;
+	int16_t pos_y;
+	float angle;
+	uint8_t motor_state;
+};
+
+static struct robot_t robot;
 
 int32_t save_appr_steps(void){
 	int32_t appr_steps = (left_motor_get_pos() + right_motor_get_pos()) / 2; // int/int!
@@ -121,11 +126,11 @@ static THD_FUNCTION(PosControl, arg) {
 
     		if(DEBUG)
     		{
-			if(state != old_state)
-			{
-				chprintf((BaseSequentialStream *)&SD3, "state = %d\n", state);
-				old_state = state;
-			}
+				if(state != old_state)
+				{
+					chprintf((BaseSequentialStream *)&SD3, "state = %d\n", state);
+					old_state = state;
+				}
     		}
 
     		switch(state) {
@@ -140,9 +145,9 @@ static THD_FUNCTION(PosControl, arg) {
     				}
     				else
     				{
-    					if(angle > PI/2.)
+    					if(robot.angle > PI/2.)
     						scan_speed = -SCAN_SPEED;
-    					if(angle <= 0)
+    					if(robot.angle <= 0)
     						scan_speed = SCAN_SPEED;
     					set_motors(ROTATION, scan_speed);
     				}
@@ -169,19 +174,19 @@ static THD_FUNCTION(PosControl, arg) {
 				take_image();
 				//Jetzt gohts en moment bis s bild fertig isch, entweder warte odr scho losfahre abr denn hemmr s risiko dass s bild verwacklet/ am falsche ort misst
 				state = SIDESTEP;
-				y_target = pos_y + SIDESTEP_DIST;
+				y_target = robot.pos_y + SIDESTEP_DIST;
 				break;
 			case SIDESTEP:
 				// evtl. ds ganze ine funktion wird denn aber gloubs kompliziert
-				if(angle > ANGLE_TOLERANCE)
+				if(robot.angle > ANGLE_TOLERANCE)
 					set_motors(ROTATION, -ROTATION_SPEED);
-				else if(angle < -ANGLE_TOLERANCE)
+				else if(robot.angle < -ANGLE_TOLERANCE)
 					set_motors(ROTATION, ROTATION_SPEED);
-				else if(pos_y >= y_target)
+				else if(robot.pos_y >= y_target)
 				{
 					set_motors(STOP, 0);
 					y_target = 0;		// nid unbedingt nötig
-					x_target = pos_x + SIDESTEP_DIST;
+					x_target = robot.pos_x + SIDESTEP_DIST;
 					state = POSITIONING;
 				}
 				else
@@ -189,11 +194,11 @@ static THD_FUNCTION(PosControl, arg) {
 				break;
 
 			case POSITIONING:
-				if(angle > PI/2. + ANGLE_TOLERANCE)
+				if(robot.angle > PI/2. + ANGLE_TOLERANCE)
 					set_motors(ROTATION, -ROTATION_SPEED);
-				else if(angle < PI/2. - ANGLE_TOLERANCE)
+				else if(robot.angle < PI/2. - ANGLE_TOLERANCE)
 					set_motors(ROTATION, ROTATION_SPEED);
-				else if(pos_x >= x_target)
+				else if(robot.pos_x >= x_target)
 				{
 					set_motors(STOP, 0);
 					x_target = 0;		// nid unbedingt nötig
