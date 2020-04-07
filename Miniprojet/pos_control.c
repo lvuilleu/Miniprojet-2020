@@ -49,6 +49,9 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define ANGLE_TOLERANCE		0.01 // -> 0.57°
 #define SIDESTEPS			1000
 
+static uint16_t pos_x = 0; 	//mm
+static uint16_t pos_y = 0; 	//mm
+static float angle = 0;		//rad
 
 int32_t save_appr_steps(void){
 	int32_t appr_steps = (left_motor_get_pos() + right_motor_get_pos()) / 2; // int/int!
@@ -58,7 +61,7 @@ int32_t save_appr_steps(void){
 }
 
 float get_angle(int32_t appr_steps){
-	float r_angle = (right_motor_get_pos() - appr_steps)*2*WHEEL_PERIMETER/(WHEEL_DISTANCE*NSTEP_ONE_TURN); //TYPECASTING sust hemmr wohrschinli rundigsfehler
+	float r_angle = (float)((right_motor_get_pos() - appr_steps)*2*WHEEL_PERIMETER)/(float)(WHEEL_DISTANCE*NSTEP_ONE_TURN);
 	return r_angle;
 }
 
@@ -79,6 +82,9 @@ void set_motors(uint8_t motors_state, int speed){
 	}
 }
 
+void new_coord_and_angle(void){
+
+}
 
 static THD_WORKING_AREA(waPosControl, 256);
 static THD_FUNCTION(PosControl, arg) {
@@ -96,6 +102,10 @@ static THD_FUNCTION(PosControl, arg) {
     while(1)
     {
     		time = chVTGetSystemTime();
+
+    		//Calculate new position
+    		new_coord_and_angle();
+
 
     		if(get_selector() > 8 && state == WAIT)
     			state = SCAN;
