@@ -75,7 +75,7 @@ void set_motors(uint8_t motors_state, int speed){
 			right_motor_set_speed(speed);
 			left_motor_set_speed(-speed);
 			break;
-		case STOP: // isch chli schöner als default findi, odr hetts do e überlegig dehinter gha?
+		case STOP: // isch chli schï¿½ner als default findi, odr hetts do e ï¿½berlegig dehinter gha?
 			right_motor_set_speed(0);
 			left_motor_set_speed(0);
 
@@ -121,22 +121,21 @@ static THD_FUNCTION(PosControl, arg) {
     		//Until HERE
 
     		switch(state) {
-				case WAIT:
-					set_motors(STOP, 0);
-					robot_angle = 0;
-					appr_steps = 0;
-					break;
+			case WAIT:
+				set_motors(STOP, 0);
+				//robot_angle = 0;
+				//appr_steps = 0;
+				break;
 
     			case SCAN:
     				if(VL53L0X_get_dist_mm() < SCAN_DIST)
     				{
-    					robot_angle += get_angle(appr_steps);
-    					appr_steps = save_appr_steps();
+    					//robot_angle += get_angle(appr_steps);
+    					//appr_steps = save_appr_steps();
     					state = APPROACH;
     				}
     				else
     				{
-    					float angle = get_angle(appr_steps) + robot_angle;
     					if(angle > PI/2.)
     					{
     						scan_speed = -SCAN_SPEED;
@@ -171,13 +170,12 @@ static THD_FUNCTION(PosControl, arg) {
 				}
 				break;
 			case DETECT_COLOR:
-				// teste wo dr zylinder im vrgliich zur kamera isch, wohrschinli jo eher links denn chönne mr niid die zentrale pixel uslese sondern bruuche en offset
+				// teste wo dr zylinder im vrgliich zur kamera isch, wohrschinli jo eher links denn chï¿½nne mr niid die zentrale pixel uslese sondern bruuche en offset
 				take_image();
 				//Jetzt gohts en moment bis s bild fertig isch, entweder warte odr scho losfahre abr denn hemmr s risiko dass s bild verwacklet/ am falsche ort misst
 				state = SIDESTEP;
 				break;
-			case SIDESTEP:; //unschÃ¶n aber sÃ¼sch geis ni, evtl angle am afang vom thread definiere
-				float angle = get_angle(appr_steps) + robot_angle;
+			case SIDESTEP:
 				if(angle > ANGLE_TOLERANCE)
 					set_motors(ROTATION, -ROTATION_SPEED);
 				else if(angle < -ANGLE_TOLERANCE)
