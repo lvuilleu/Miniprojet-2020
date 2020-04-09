@@ -51,6 +51,10 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define SCAN_SPEED			200 //steps/s
 #define ANGLE_TOLERANCE		0.01 // -> 0.57°
 #define SIDESTEP_DIST		100 // mm
+#define RED_AREA				100 // mm
+#define GREEN_AREA			2*RED_AREA
+#define BLUE_AREA			3*RED_AREA
+#define AREA_Y				0 // mm
 
 struct robot_t{
 	float pos_x;
@@ -123,6 +127,41 @@ void calculate_target_pos(void) {
 	// söt ähnlech zu new_coord_and_angle() si
 }
 
+uint16_t calculate_positioning(void) {
+	uint16_t area_x = 0;
+		switch(cylinder.color) {
+			case RED:
+				area_x = RED_AREA;
+				break;
+			case GREEN:
+				area_x = GREEN_AREA;
+				break;
+			case BLUE:
+				area_x = BLUE_AREA;
+				break;
+		}
+
+	return (area_x + cylinder.pos_x +
+			(float)((robot.pos_y - cylinder.pos_y + AREA_Y)*(cylinder.pos_x - area_x))/(float)(cylinder.pos_y - AREA_Y));
+}
+
+float calculate_target_angle(void) {
+	uint16_t area_x = 0;
+	switch(cylinder.color) {
+		case RED:
+			area_x = RED_AREA;
+			break;
+		case GREEN:
+			area_x = GREEN_AREA;
+			break;
+		case BLUE:
+			area_x = BLUE_AREA;
+			break;
+	}
+
+	return atanf((float)(cylinder.pos_x - area_x)/(float)(cylinder.pos_y - AREA_Y));
+}
+
 static THD_WORKING_AREA(waPosControl, 256);
 static THD_FUNCTION(PosControl, arg) {
 
@@ -135,6 +174,7 @@ static THD_FUNCTION(PosControl, arg) {
 
     static uint16_t y_target = 0;
     static uint16_t x_target = 0;
+    float target_angle = 0.;
 
     //Robot init
     robot.pos_x = 0;
@@ -227,7 +267,8 @@ static THD_FUNCTION(PosControl, arg) {
 			{
 				set_motors(STOP, 0);
 				y_target = 0;		// nid unbedingt nötig
-				x_target = robot.pos_x + SIDESTEP_DIST;
+				cylinder.color = get_color();
+				x_target = calculate_positioning();
 				state = POSITIONING;
 			}
 			else
@@ -243,6 +284,7 @@ static THD_FUNCTION(PosControl, arg) {
 			{
 				set_motors(STOP, 0);
 				x_target = 0;		// nid unbedingt nötig
+				target_angle = PI + calculate_target_angle(); // positive winkel
 				state = TOUCH;
 			}
 			else
@@ -250,12 +292,40 @@ static THD_FUNCTION(PosControl, arg) {
 			break;
 
 		case TOUCH:
+			if(robot.angle > target_angle + ANGLE_TOLERANCE)
+				set_motors(ROTATION, -ROTATION_SPEED);
+			else if(robot.angle < target_angle - ANGLE_TOLERANCE)
+				set_motors(ROTATION, ROTATION_SPEED);
+			else if(VL53L0X_get_dist_mm() < TOUCH_DIST)
+			{
+				set_motors(STOP, 0);
+				state = PUSH;
+			}
+			else
+				set_motors(STRAIGHT, STRAIGHT_SPEED);
 
 			break;
 		case PUSH:
+			if(robot.angle > target_angle + ANGLE_TOLERANCE)
+				set_motors(ROTATION, -ROTATION_SPEED);
+			else if(robot.angle < target_angle - ANGLE_TOLERANCE)
+				set_motors(ROTATION, ROTATION_SPEED);
+			else if(robot.pos_y <= AREA_Y)
+			{
+				set_motors(STOP, 0);
+				state = HOME;
+			}
+			else
+				set_motors(STRAIGHT, STRAIGHT_SPEED);
 
 			break;
 		case HOME:
+			if(robot.pos_x < AREA_Y + TOUCH_DIST)
+				set_motors(STRAIGHT, -STRAIGHT_SPEED);
+			/*else if(robot.angle > target_angle + ANGLE_TOLERANCE)
+				set_motors(ROTATION, -ROTATION_SPEED);
+			else if(robot.angle < target_angle - ANGLE_TOLERANCE)
+				set_motors(ROTATION, ROTATION_SPEED);*/
 
 			break;
 		default:
