@@ -31,6 +31,7 @@ typedef enum {
 	POSITIONING,
 	TOUCH,
 	PUSH,
+	BACK_UP,
 	HOME,
 } states;
 
@@ -240,7 +241,6 @@ static THD_FUNCTION(PosControl, arg) {
 			if(VL53L0X_get_dist_mm() < TOUCH_DIST)
 			{
 				set_motors(STOP, 0);
-				calculate_target_pos(); // muess no implementiert wärde
 				state = FINESCANRIGHT;
 			}
 			else if(VL53L0X_get_dist_mm() > SCAN_DIST)
@@ -347,8 +347,8 @@ static THD_FUNCTION(PosControl, arg) {
 			}
 			else
 				set_motors(STRAIGHT, STRAIGHT_SPEED);
-
 			break;
+
 		case PUSH:
 			if(robot.angle > target_angle + ANGLE_TOLERANCE)
 				set_motors(ROTATION, -ROTATION_SPEED);
@@ -361,19 +361,41 @@ static THD_FUNCTION(PosControl, arg) {
 			}
 			else
 				set_motors(STRAIGHT, STRAIGHT_SPEED);
-
 			break;
-		case HOME:
+
+		case BACK_UP:
 			if(robot.pos_x > AREA_Y + TOUCH_DIST)
 				set_motors(STOP, 0);
 			else
 				set_motors(STRAIGHT, -STRAIGHT_SPEED);
-			/*else if(robot.angle > target_angle + ANGLE_TOLERANCE)
-				set_motors(ROTATION, -ROTATION_SPEED);
-			else if(robot.angle < target_angle - ANGLE_TOLERANCE)
-				set_motors(ROTATION, ROTATION_SPEED);*/
-
 			break;
+
+		case HOME:
+			if(robot.pos_x > 0 && robot.angle < 3*PI/2. - ANGLE_TOLERANCE)
+				set_motors(ROTATION, ROTATION_SPEED);
+			else if(robot.pos_x > 0 && robot.angle > 3*PI/2. + ANGLE_TOLERANCE)
+				set_motors(ROTATION, -ROTATION_SPEED);
+			else if(robot.pos_x > 0)
+				set_motors(STRAIGHT, STRAIGHT_SPEED);
+
+			else if(robot.pos_y > 0 && robot.angle < PI - ANGLE_TOLERANCE)
+				set_motors(ROTATION, ROTATION_SPEED);
+			else if(robot.pos_y > 0 && robot.angle > PI + ANGLE_TOLERANCE)
+				set_motors(ROTATION, -ROTATION_SPEED);
+			else if(robot.pos_y > 0)
+				set_motors(STRAIGHT, STRAIGHT_SPEED);
+
+			else if(robot.angle > ANGLE_TOLERANCE)
+				set_motors(ROTATION, ROTATION_SPEED);
+			else if(robot.angle < -ANGLE_TOLERANCE)
+				set_motors(ROTATION, -ROTATION_SPEED);
+			else
+			{
+				// reset, verify if all cylinders are collected, etc.
+				state = SCAN;
+			}
+			break;
+
 		default:
 			;
 		}
