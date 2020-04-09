@@ -31,6 +31,7 @@ typedef enum {
 	POSITIONING,
 	TOUCH,
 	PUSH,
+	BACK_UP,
 	HOME,
 } states;
 
@@ -54,6 +55,7 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define STRAIGHT_SPEED		500 // steps/s
 #define SCAN_SPEED			200 //steps/s
 #define ANGLE_TOLERANCE		0.01 // -> 0.57°
+#define DIST_TOLERANCE		5 // mm
 #define RED_AREA				100 // mm
 #define GREEN_AREA			2*RED_AREA
 #define BLUE_AREA			3*RED_AREA
@@ -80,12 +82,6 @@ struct cylinder_t{
 
 static struct cylinder_t cylinder;
 
-/*int32_t save_appr_steps(void){
-	int32_t appr_steps = (left_motor_get_pos() + right_motor_get_pos()) / 2; // int/int!
-	left_motor_set_pos(appr_steps);
-	right_motor_set_pos(appr_steps);
-	return appr_steps;
-}*/
 
 float get_angle(void){
 	return ((float)(right_motor_get_pos()*2*WHEEL_PERIMETER)/(float)(WHEEL_DISTANCE*NSTEP_ONE_TURN));
@@ -129,12 +125,6 @@ void new_coord_and_angle(void){
 	left_motor_set_pos(0);
 }
 
-void calculate_target_pos(void) {
-	// berechnet d position vom zylinder wemer gnue nach si
-	// wird grad vorem DETECT_COLOR ufgrüefe
-	// söt ähnlech zu new_coord_and_angle() si
-}
-
 uint16_t calculate_positioning(void) {
 	uint16_t area_x = 0;
 		switch(cylinder.color) {
@@ -149,8 +139,7 @@ uint16_t calculate_positioning(void) {
 				break;
 		}
 
-	return (area_x + cylinder.pos_x +
-			(float)((robot.pos_y - cylinder.pos_y + AREA_Y)*(cylinder.pos_x - area_x))/(float)(cylinder.pos_y - AREA_Y));
+	return (cylinder.pos_x + (float)((robot.pos_y - cylinder.pos_y)*(cylinder.pos_x - area_x))/(float)(cylinder.pos_y - AREA_Y));
 }
 
 float calculate_target_angle(void) {
@@ -253,7 +242,6 @@ static THD_FUNCTION(PosControl, arg) {
 			if(VL53L0X_get_dist_mm() < TOUCH_DIST)
 			{
 				set_motors(STOP, 0);
-				calculate_target_pos(); // muess no implementiert wärde
 				state = FINESCANRIGHT;
 			}
 			else if(VL53L0X_get_dist_mm() > SCAN_DIST)
@@ -340,13 +328,15 @@ static THD_FUNCTION(PosControl, arg) {
 				set_motors(ROTATION, -ROTATION_SPEED);
 			else if(robot.angle < PI/2. - ANGLE_TOLERANCE)
 				set_motors(ROTATION, ROTATION_SPEED);
-			else if(robot.pos_x >= x_target)
+			else if(robot.pos_x < x_target + DIST_TOLERANCE && robot.pos_x > x_target - DIST_TOLERANCE)
 			{
 				set_motors(STOP, 0);
 				x_target = 0;		// nid unbedingt nötig
 				target_angle = PI + calculate_target_angle(); // positive winkel
 				state = TOUCH;
 			}
+			else if (x_target < robot.pos_x)
+				set_motors(STRAIGHT, -STRAIGHT_SPEED);
 			else
 				set_motors(STRAIGHT, STRAIGHT_SPEED);
 			break;
@@ -356,15 +346,15 @@ static THD_FUNCTION(PosControl, arg) {
 				set_motors(ROTATION, -ROTATION_SPEED);
 			else if(robot.angle < target_angle - ANGLE_TOLERANCE)
 				set_motors(ROTATION, ROTATION_SPEED);
-			else if(VL53L0X_get_dist_mm() < TOUCH_DIST)
+			else if(VL53L0X_get_dist_mm() < TOUCH_DIST || robot.pos_y < 0)
 			{
 				set_motors(STOP, 0);
 				state = PUSH;
 			}
 			else
 				set_motors(STRAIGHT, STRAIGHT_SPEED);
-
 			break;
+
 		case PUSH:
 			if(robot.angle > target_angle + ANGLE_TOLERANCE)
 				set_motors(ROTATION, -ROTATION_SPEED);
@@ -377,17 +367,41 @@ static THD_FUNCTION(PosControl, arg) {
 			}
 			else
 				set_motors(STRAIGHT, STRAIGHT_SPEED);
-
 			break;
-		case HOME:
-			if(robot.pos_x < AREA_Y + TOUCH_DIST)
+
+		case BACK_UP:
+			if(robot.pos_x > AREA_Y + TOUCH_DIST)
+				set_motors(STOP, 0);
+			else
 				set_motors(STRAIGHT, -STRAIGHT_SPEED);
-			/*else if(robot.angle > target_angle + ANGLE_TOLERANCE)
-				set_motors(ROTATION, -ROTATION_SPEED);
-			else if(robot.angle < target_angle - ANGLE_TOLERANCE)
-				set_motors(ROTATION, ROTATION_SPEED);*/
-
 			break;
+
+		case HOME:
+			if(robot.pos_x > 0 && robot.angle < 3*PI/2. - ANGLE_TOLERANCE)
+				set_motors(ROTATION, ROTATION_SPEED);
+			else if(robot.pos_x > 0 && robot.angle > 3*PI/2. + ANGLE_TOLERANCE)
+				set_motors(ROTATION, -ROTATION_SPEED);
+			else if(robot.pos_x > 0)
+				set_motors(STRAIGHT, STRAIGHT_SPEED);
+
+			else if(robot.pos_y > 0 && robot.angle < PI - ANGLE_TOLERANCE)
+				set_motors(ROTATION, ROTATION_SPEED);
+			else if(robot.pos_y > 0 && robot.angle > PI + ANGLE_TOLERANCE)
+				set_motors(ROTATION, -ROTATION_SPEED);
+			else if(robot.pos_y > 0)
+				set_motors(STRAIGHT, STRAIGHT_SPEED);
+
+			else if(robot.angle > ANGLE_TOLERANCE)
+				set_motors(ROTATION, ROTATION_SPEED);
+			else if(robot.angle < -ANGLE_TOLERANCE)
+				set_motors(ROTATION, -ROTATION_SPEED);
+			else
+			{
+				// reset, verify if all cylinders are collected, etc.
+				state = SCAN;
+			}
+			break;
+
 		default:
 			;
 		}
