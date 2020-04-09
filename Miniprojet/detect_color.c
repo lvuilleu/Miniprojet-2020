@@ -22,7 +22,7 @@
 
 //Blue seems to have generally rather low output values on the camera,
 //therefore we slightly increase the value to improve color recognition
-#define BLUE_CORRECTION_VALUE 1.5
+#define BLUE_CORRECTION_VALUE 1.
 
 //semaphore
 static BSEMAPHORE_DECL(image_ready_sem, TRUE);

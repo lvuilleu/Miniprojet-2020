@@ -58,9 +58,10 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define GREEN_AREA			2*RED_AREA
 #define BLUE_AREA			3*RED_AREA
 #define AREA_Y				0 // mm
-#define SIDESTEP_DIST		250 // mm
+#define SIDESTEP_DIST		150 // mm
 #define CYLINDER_RADIUS 	30 //mm
 #define MINFINEANGLE		0.7 //rad
+#define PHOTO_DIST			200 //mm
 
 struct robot_t{
 	float pos_x;
@@ -303,11 +304,16 @@ static THD_FUNCTION(PosControl, arg) {
 		case DETECT_COLOR:
 			if(robot.angle > fineangle)
 				set_motors(ROTATION, -SCAN_SPEED);
+			else if(VL53L0X_get_dist_mm() < PHOTO_DIST)
+			{
+				set_motors(STRAIGHT, -STRAIGHT_SPEED);
+			}
 			else
 			{
 				take_image();
 				state = SIDESTEP;
-				y_target = robot.pos_y + SIDESTEP_DIST;
+				y_target = cylinder.pos_y + SIDESTEP_DIST;
+				chThdSleepMilliseconds(100);
 			}
 			break;
 
