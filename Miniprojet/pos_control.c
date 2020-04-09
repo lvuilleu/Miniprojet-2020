@@ -61,6 +61,14 @@ struct robot_t{
 
 static struct robot_t robot;
 
+struct cylinder_t{
+	uint16_t pos_x;
+	uint16_t pos_y;
+	uint8_t color;
+};
+
+static struct cylinder_t cylinder;
+
 /*int32_t save_appr_steps(void){
 	int32_t appr_steps = (left_motor_get_pos() + right_motor_get_pos()) / 2; // int/int!
 	left_motor_set_pos(appr_steps);
@@ -84,7 +92,7 @@ void set_motors(uint8_t motors_state, int speed){
 			left_motor_set_speed(-speed);
 			robot.motor_state = ROTATION;
 			break;
-		case STOP: // isch chli sch�ner als default findi, odr hetts do e �berlegig dehinter gha?
+		case STOP:
 			right_motor_set_speed(0);
 			left_motor_set_speed(0);
 			robot.motor_state = STOP;
@@ -136,123 +144,123 @@ static THD_FUNCTION(PosControl, arg) {
 
     while(1)
     {
-    		time = chVTGetSystemTime();
+		time = chVTGetSystemTime();
 
-    		if(get_selector() > 8 && state == WAIT)
-    			state = SCAN;
-    		if(get_selector() < 8)
-    		{
-    			state = WAIT;
-    			robot.pos_x = 0;
-				robot.pos_y = 0;
-				robot.angle = 0;
-				robot.motor_state = STOP;
-				scan_speed = SCAN_SPEED;
-				reset_color();
-    		}
+		if(get_selector() > 8 && state == WAIT)
+			state = SCAN;
+		if(get_selector() < 8)
+		{
+			state = WAIT;
+			robot.pos_x = 0;
+			robot.pos_y = 0;
+			robot.angle = 0;
+			robot.motor_state = STOP;
+			scan_speed = SCAN_SPEED;
+			reset_color();
+		}
 
 
-    		//Calculate new position
-			new_coord_and_angle();
+		//Calculate new position
+		new_coord_and_angle();
 
-    		if(DEBUG)
-    		{
-    			static systime_t oldtime= 0;
-				if((robot.angle || robot.pos_x || robot.pos_y) && time > oldtime+1e3)
+		if(DEBUG)
+		{
+			static systime_t oldtime= 0;
+			if((robot.angle || robot.pos_x || robot.pos_y) && time > oldtime+1e3)
+			{
+				chprintf((BaseSequentialStream *)&SD3, "state = %d, angle = %f, pos_x = %f, pos_y = %f\n", state, robot.angle, robot.pos_x, robot.pos_y);
+				oldtime = time;
+			}
+		}
+
+		switch(state) {
+		case WAIT:
+			set_motors(STOP, 0);
+			break;
+
+			case SCAN:
+				if(VL53L0X_get_dist_mm() < SCAN_DIST)
 				{
-					chprintf((BaseSequentialStream *)&SD3, "state = %d, angle = %f, pos_x = %f, pos_y = %f\n", state, robot.angle, robot.pos_x, robot.pos_y);
-					oldtime = time;
+					state = APPROACH;
 				}
-    		}
+				else
+				{
+					if(robot.angle > PI/2.)
+						scan_speed = -SCAN_SPEED;
+					if(robot.angle < 0)
+						scan_speed = SCAN_SPEED;
+					set_motors(ROTATION, scan_speed);
+				}
+			break;
 
-    		switch(state) {
-			case WAIT:
+		case APPROACH:
+			if(VL53L0X_get_dist_mm() < TOUCH_DIST)
+			{
 				set_motors(STOP, 0);
-				break;
+				calculate_target_pos(); // muess no implementiert wärde
+				state = DETECT_COLOR;
+			}
+			else if(VL53L0X_get_dist_mm() > SCAN_DIST)
+			{
+				set_motors(STOP, 0);
+				state = SCAN;
+			}
+			else
+				set_motors(STRAIGHT, STRAIGHT_SPEED);
 
-    			case SCAN:
-    				if(VL53L0X_get_dist_mm() < SCAN_DIST)
-    				{
-    					state = APPROACH;
-    				}
-    				else
-    				{
-    					if(robot.angle > PI/2.)
-    						scan_speed = -SCAN_SPEED;
-    					if(robot.angle < 0)
-    						scan_speed = SCAN_SPEED;
-    					set_motors(ROTATION, scan_speed);
-    				}
-				break;
+			break;
 
-			case APPROACH:
-				if(VL53L0X_get_dist_mm() < TOUCH_DIST)
-				{
-					set_motors(STOP, 0);
-					calculate_target_pos(); // muess no implementiert wärde
-					state = DETECT_COLOR;
-				}
-				else if(VL53L0X_get_dist_mm() > SCAN_DIST)
-				{
-					set_motors(STOP, 0);
-					state = SCAN;
-				}
-				else
-					set_motors(STRAIGHT, STRAIGHT_SPEED);
+		case DETECT_COLOR:
+			// teste wo dr zylinder im vrgliich zur kamera isch, wohrschinli jo eher links denn ch�nne mr niid die zentrale pixel uslese sondern bruuche en offset
+			take_image();
+			state = SIDESTEP;
+			y_target = robot.pos_y + SIDESTEP_DIST;
+			break;
 
-				break;
+		case SIDESTEP:
+			// evtl. ds ganze ine funktion wird denn aber gloubs kompliziert
+			if(robot.angle > ANGLE_TOLERANCE)
+				set_motors(ROTATION, -ROTATION_SPEED);
+			else if(robot.angle < -ANGLE_TOLERANCE)
+				set_motors(ROTATION, ROTATION_SPEED);
+			else if(robot.pos_y >= y_target)
+			{
+				set_motors(STOP, 0);
+				y_target = 0;		// nid unbedingt nötig
+				x_target = robot.pos_x + SIDESTEP_DIST;
+				state = POSITIONING;
+			}
+			else
+				set_motors(STRAIGHT, STRAIGHT_SPEED);
+			break;
 
-			case DETECT_COLOR:
-				// teste wo dr zylinder im vrgliich zur kamera isch, wohrschinli jo eher links denn ch�nne mr niid die zentrale pixel uslese sondern bruuche en offset
-				take_image();
-				state = SIDESTEP;
-				y_target = robot.pos_y + SIDESTEP_DIST;
-				break;
+		case POSITIONING:
+			if(robot.angle > PI/2. + ANGLE_TOLERANCE)
+				set_motors(ROTATION, -ROTATION_SPEED);
+			else if(robot.angle < PI/2. - ANGLE_TOLERANCE)
+				set_motors(ROTATION, ROTATION_SPEED);
+			else if(robot.pos_x >= x_target)
+			{
+				set_motors(STOP, 0);
+				x_target = 0;		// nid unbedingt nötig
+				state = TOUCH;
+			}
+			else
+				set_motors(STRAIGHT, STRAIGHT_SPEED);
+			break;
 
-			case SIDESTEP:
-				// evtl. ds ganze ine funktion wird denn aber gloubs kompliziert
-				if(robot.angle > ANGLE_TOLERANCE)
-					set_motors(ROTATION, -ROTATION_SPEED);
-				else if(robot.angle < -ANGLE_TOLERANCE)
-					set_motors(ROTATION, ROTATION_SPEED);
-				else if(robot.pos_y >= y_target)
-				{
-					set_motors(STOP, 0);
-					y_target = 0;		// nid unbedingt nötig
-					x_target = robot.pos_x + SIDESTEP_DIST;
-					state = POSITIONING;
-				}
-				else
-					set_motors(STRAIGHT, STRAIGHT_SPEED);
-				break;
+		case TOUCH:
 
-			case POSITIONING:
-				if(robot.angle > PI/2. + ANGLE_TOLERANCE)
-					set_motors(ROTATION, -ROTATION_SPEED);
-				else if(robot.angle < PI/2. - ANGLE_TOLERANCE)
-					set_motors(ROTATION, ROTATION_SPEED);
-				else if(robot.pos_x >= x_target)
-				{
-					set_motors(STOP, 0);
-					x_target = 0;		// nid unbedingt nötig
-					state = TOUCH;
-				}
-				else
-					set_motors(STRAIGHT, STRAIGHT_SPEED);
-				break;
+			break;
+		case PUSH:
 
-			case TOUCH:
+			break;
+		case HOME:
 
-				break;
-			case PUSH:
-
-				break;
-			case HOME:
-
-				break;
-			default:
-				;
-    		}
+			break;
+		default:
+			;
+		}
 
 		chThdSleepUntilWindowed(time, time + MS2ST(PERIOD));
     }
