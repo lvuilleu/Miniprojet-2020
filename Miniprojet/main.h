@@ -2,7 +2,7 @@
  * main.h
  *
  *  Created on: 31.03.2020
- *      Author: Tim Bürgel
+ *      Author: Tim Bï¿½rgel
  */
 
 #ifndef MAIN_H_
@@ -14,14 +14,6 @@
 
 //Size of camera array
 #define IMAGE_BUFFER_SIZE		640
-
-typedef enum{
-	NO_COLOR,
-	RED,
-	GREEN,
-	BLUE,
-	NB_COLOR
-} Colors_detected;
 
 /** Robot wide IPC bus. */
 extern messagebus_t bus;
