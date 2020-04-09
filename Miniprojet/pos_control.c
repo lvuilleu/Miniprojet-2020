@@ -54,7 +54,6 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define STRAIGHT_SPEED		500 // steps/s
 #define SCAN_SPEED			200 //steps/s
 #define ANGLE_TOLERANCE		0.01 // -> 0.57°
-#define SIDESTEP_DIST		100 // mm
 #define RED_AREA				100 // mm
 #define GREEN_AREA			2*RED_AREA
 #define BLUE_AREA			3*RED_AREA
