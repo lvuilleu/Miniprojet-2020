@@ -49,14 +49,14 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define WHEEL_PERIMETER		(PI*42.5) // [mm]
 #define PERIOD				10 // 100 Hz
 #define SCAN_DIST			1000 // mm
-#define TOUCH_DIST			150 // mm
+#define TOUCH_DIST			200 // mm
 #define FINE_DIST 			200 //mm
 #define ROTATION_SPEED		500 // steps/s
-#define STRAIGHT_SPEED		500 // steps/s
+#define STRAIGHT_SPEED		300 // steps/s
 #define SCAN_SPEED			200 //steps/s
 #define ANGLE_TOLERANCE		0.01 // -> 0.57°
-#define DIST_TOLERANCE		5 // mm
-#define RED_AREA				100 // mm
+#define DIST_TOLERANCE		2 // mm
+#define RED_AREA			100 // mm
 #define GREEN_AREA			2*RED_AREA
 #define BLUE_AREA			3*RED_AREA
 #define AREA_Y				0 // mm
@@ -213,7 +213,7 @@ static THD_FUNCTION(PosControl, arg) {
 			static systime_t oldtime= 0;
 			if((robot.angle || robot.pos_x || robot.pos_y) && time > oldtime+1e3)
 			{
-				//chprintf((BaseSequentialStream *)&SD3, "state = %d, angle = %f, pos_x = %f, pos_y = %f\n", state, robot.angle, robot.pos_x, robot.pos_y);
+				chprintf((BaseSequentialStream *)&SD3, "state = %d, angle = %f, pos_x = %f, pos_y = %f\n", state, robot.angle, robot.pos_x, robot.pos_y);
 				oldtime = time;
 			}
 		}
@@ -363,7 +363,7 @@ static THD_FUNCTION(PosControl, arg) {
 			else if(robot.pos_y <= AREA_Y)
 			{
 				set_motors(STOP, 0);
-				state = HOME;
+				state = BACK_UP;
 			}
 			else
 				set_motors(STRAIGHT, STRAIGHT_SPEED);
@@ -371,7 +371,10 @@ static THD_FUNCTION(PosControl, arg) {
 
 		case BACK_UP:
 			if(robot.pos_x > AREA_Y + TOUCH_DIST)
+			{
 				set_motors(STOP, 0);
+				state = HOME;
+			}
 			else
 				set_motors(STRAIGHT, -STRAIGHT_SPEED);
 			break;
