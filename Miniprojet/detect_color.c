@@ -105,9 +105,9 @@ static THD_FUNCTION(ProcessImage, arg) {
 		}
 
 		//Mean values
-		uint8_t red_mean = 0;
-		uint8_t green_mean = 0;
-		uint8_t blue_mean = 0;
+		uint16_t red_mean = 0;
+		uint16_t green_mean = 0;
+		uint16_t blue_mean = 0;
 		for(int i = 0; i < AVG_AREA; i++)
 		{
 			red_mean += red_image[i];
