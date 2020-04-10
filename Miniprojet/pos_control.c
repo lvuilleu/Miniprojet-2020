@@ -33,6 +33,7 @@ typedef enum {
 	PUSH,
 	BACK_UP,
 	HOME,
+	DONE
 } states;
 
 typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_direction
@@ -52,10 +53,10 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define TOUCH_DIST			200 // mm
 #define FINE_DIST 			200 //mm
 #define ROTATION_SPEED		500 // steps/s
-#define STRAIGHT_SPEED		300 // steps/s
+#define STRAIGHT_SPEED		500 // steps/s
 #define SCAN_SPEED			200 //steps/s
-#define ANGLE_TOLERANCE		0.01 // -> 0.57°
-#define DIST_TOLERANCE		2 // mm
+#define ANGLE_TOLERANCE		0.03 // -> 0.57°
+#define DIST_TOLERANCE		1 // mm
 #define RED_AREA			100 // mm
 #define GREEN_AREA			2*RED_AREA
 #define BLUE_AREA			3*RED_AREA
@@ -70,6 +71,7 @@ struct robot_t{
 	float pos_y;
 	float angle;
 	uint8_t motor_state;
+	uint8_t progress;
 };
 
 static struct robot_t robot;
@@ -180,6 +182,7 @@ static THD_FUNCTION(PosControl, arg) {
     robot.pos_y = 0;
     robot.angle = 0;
     robot.motor_state = STOP;
+    robot.progress = 0;
 
     //Cylinder init
     cylinder.pos_x = 0;
@@ -198,10 +201,11 @@ static THD_FUNCTION(PosControl, arg) {
 			robot.pos_x = 0;
 			robot.pos_y = 0;
 			robot.angle = 0;
-			robot.motor_state = STOP;
-			scan_speed = SCAN_SPEED;
 			reset_color();
+			set_motors(STOP,0);
+			scan_speed = SCAN_SPEED;
 			fineangle = 0;
+			robot.progress = 0;
 		}
 
 
@@ -370,7 +374,7 @@ static THD_FUNCTION(PosControl, arg) {
 			break;
 
 		case BACK_UP:
-			if(robot.pos_x > AREA_Y + TOUCH_DIST)
+			if(robot.pos_y > AREA_Y + TOUCH_DIST)
 			{
 				set_motors(STOP, 0);
 				state = HOME;
@@ -394,19 +398,30 @@ static THD_FUNCTION(PosControl, arg) {
 			else if(robot.pos_y > 0)
 				set_motors(STRAIGHT, STRAIGHT_SPEED);
 
-			else if(robot.angle > ANGLE_TOLERANCE)
+			else if(robot.angle < - ANGLE_TOLERANCE)
 				set_motors(ROTATION, ROTATION_SPEED);
-			else if(robot.angle < -ANGLE_TOLERANCE)
+			else if(robot.angle > ANGLE_TOLERANCE)
 				set_motors(ROTATION, -ROTATION_SPEED);
 			else
 			{
-				// reset, verify if all cylinders are collected, etc.
-				state = SCAN;
+				reset_color();
+				set_motors(STOP,0);
+				scan_speed = SCAN_SPEED;
+				fineangle = 0;
+
+				robot.progress++;
+				if(robot.progress >= 3)
+					state = DONE;
+				else
+					state = SCAN;
+
 			}
 			break;
 
+		case DONE:
 		default:
 			;
+			break;
 		}
 
 		chThdSleepUntilWindowed(time, time + MS2ST(PERIOD));
