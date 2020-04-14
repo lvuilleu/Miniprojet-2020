@@ -31,7 +31,9 @@ typedef enum {
 	POSITIONING,
 	TOUCH,
 	PUSH,
+	BACK_UP,
 	HOME,
+	DONE
 } states;
 
 typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_direction
@@ -48,25 +50,28 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define WHEEL_PERIMETER		(PI*42.5) // [mm]
 #define PERIOD				10 // 100 Hz
 #define SCAN_DIST			1000 // mm
-#define TOUCH_DIST			150 // mm
+#define TOUCH_DIST			200 // mm
 #define FINE_DIST 			200 //mm
 #define ROTATION_SPEED		500 // steps/s
 #define STRAIGHT_SPEED		500 // steps/s
 #define SCAN_SPEED			200 //steps/s
-#define ANGLE_TOLERANCE		0.01 // -> 0.57°
-#define RED_AREA				100 // mm
+#define ANGLE_TOLERANCE		0.03 // -> 0.57°
+#define DIST_TOLERANCE		1 // mm
+#define RED_AREA			100 // mm
 #define GREEN_AREA			2*RED_AREA
 #define BLUE_AREA			3*RED_AREA
 #define AREA_Y				0 // mm
-#define SIDESTEP_DIST		250 // mm
+#define SIDESTEP_DIST		150 // mm
 #define CYLINDER_RADIUS 	30 //mm
 #define MINFINEANGLE		0.7 //rad
+#define PHOTO_DIST			200 //mm
 
 struct robot_t{
 	float pos_x;
 	float pos_y;
 	float angle;
 	uint8_t motor_state;
+	uint8_t progress;
 };
 
 static struct robot_t robot;
@@ -79,12 +84,6 @@ struct cylinder_t{
 
 static struct cylinder_t cylinder;
 
-/*int32_t save_appr_steps(void){
-	int32_t appr_steps = (left_motor_get_pos() + right_motor_get_pos()) / 2; // int/int!
-	left_motor_set_pos(appr_steps);
-	right_motor_set_pos(appr_steps);
-	return appr_steps;
-}*/
 
 float get_angle(void){
 	return ((float)(right_motor_get_pos()*2*WHEEL_PERIMETER)/(float)(WHEEL_DISTANCE*NSTEP_ONE_TURN));
@@ -128,12 +127,6 @@ void new_coord_and_angle(void){
 	left_motor_set_pos(0);
 }
 
-void calculate_target_pos(void) {
-	// berechnet d position vom zylinder wemer gnue nach si
-	// wird grad vorem DETECT_COLOR ufgrüefe
-	// söt ähnlech zu new_coord_and_angle() si
-}
-
 uint16_t calculate_positioning(void) {
 	uint16_t area_x = 0;
 		switch(cylinder.color) {
@@ -148,8 +141,7 @@ uint16_t calculate_positioning(void) {
 				break;
 		}
 
-	return (area_x + cylinder.pos_x +
-			(float)((robot.pos_y - cylinder.pos_y + AREA_Y)*(cylinder.pos_x - area_x))/(float)(cylinder.pos_y - AREA_Y));
+	return (cylinder.pos_x + (float)((robot.pos_y - cylinder.pos_y)*(cylinder.pos_x - area_x))/(float)(cylinder.pos_y - AREA_Y));
 }
 
 float calculate_target_angle(void) {
@@ -190,6 +182,7 @@ static THD_FUNCTION(PosControl, arg) {
     robot.pos_y = 0;
     robot.angle = 0;
     robot.motor_state = STOP;
+    robot.progress = 0;
 
     //Cylinder init
     cylinder.pos_x = 0;
@@ -208,10 +201,11 @@ static THD_FUNCTION(PosControl, arg) {
 			robot.pos_x = 0;
 			robot.pos_y = 0;
 			robot.angle = 0;
-			robot.motor_state = STOP;
-			scan_speed = SCAN_SPEED;
 			reset_color();
+			set_motors(STOP,0);
+			scan_speed = SCAN_SPEED;
 			fineangle = 0;
+			robot.progress = 0;
 		}
 
 
@@ -223,7 +217,7 @@ static THD_FUNCTION(PosControl, arg) {
 			static systime_t oldtime= 0;
 			if((robot.angle || robot.pos_x || robot.pos_y) && time > oldtime+1e3)
 			{
-				//chprintf((BaseSequentialStream *)&SD3, "state = %d, angle = %f, pos_x = %f, pos_y = %f\n", state, robot.angle, robot.pos_x, robot.pos_y);
+				chprintf((BaseSequentialStream *)&SD3, "state = %d, angle = %f, pos_x = %f, pos_y = %f\n", state, robot.angle, robot.pos_x, robot.pos_y);
 				oldtime = time;
 			}
 		}
@@ -252,7 +246,6 @@ static THD_FUNCTION(PosControl, arg) {
 			if(VL53L0X_get_dist_mm() < TOUCH_DIST)
 			{
 				set_motors(STOP, 0);
-				calculate_target_pos(); // muess no implementiert wärde
 				state = FINESCANRIGHT;
 			}
 			else if(VL53L0X_get_dist_mm() > SCAN_DIST)
@@ -303,11 +296,16 @@ static THD_FUNCTION(PosControl, arg) {
 		case DETECT_COLOR:
 			if(robot.angle > fineangle)
 				set_motors(ROTATION, -SCAN_SPEED);
+			else if(VL53L0X_get_dist_mm() < PHOTO_DIST)
+			{
+				set_motors(STRAIGHT, -STRAIGHT_SPEED);
+			}
 			else
 			{
 				take_image();
 				state = SIDESTEP;
-				y_target = robot.pos_y + SIDESTEP_DIST;
+				y_target = cylinder.pos_y + SIDESTEP_DIST;
+				chThdSleepMilliseconds(100);
 			}
 			break;
 
@@ -334,13 +332,15 @@ static THD_FUNCTION(PosControl, arg) {
 				set_motors(ROTATION, -ROTATION_SPEED);
 			else if(robot.angle < PI/2. - ANGLE_TOLERANCE)
 				set_motors(ROTATION, ROTATION_SPEED);
-			else if(robot.pos_x >= x_target)
+			else if(robot.pos_x < x_target + DIST_TOLERANCE && robot.pos_x > x_target - DIST_TOLERANCE)
 			{
 				set_motors(STOP, 0);
 				x_target = 0;		// nid unbedingt nötig
 				target_angle = PI + calculate_target_angle(); // positive winkel
 				state = TOUCH;
 			}
+			else if (x_target < robot.pos_x)
+				set_motors(STRAIGHT, -STRAIGHT_SPEED);
 			else
 				set_motors(STRAIGHT, STRAIGHT_SPEED);
 			break;
@@ -350,15 +350,15 @@ static THD_FUNCTION(PosControl, arg) {
 				set_motors(ROTATION, -ROTATION_SPEED);
 			else if(robot.angle < target_angle - ANGLE_TOLERANCE)
 				set_motors(ROTATION, ROTATION_SPEED);
-			else if(VL53L0X_get_dist_mm() < TOUCH_DIST)
+			else if(VL53L0X_get_dist_mm() < TOUCH_DIST || robot.pos_y < 0)
 			{
 				set_motors(STOP, 0);
 				state = PUSH;
 			}
 			else
 				set_motors(STRAIGHT, STRAIGHT_SPEED);
-
 			break;
+
 		case PUSH:
 			if(robot.angle > target_angle + ANGLE_TOLERANCE)
 				set_motors(ROTATION, -ROTATION_SPEED);
@@ -367,23 +367,61 @@ static THD_FUNCTION(PosControl, arg) {
 			else if(robot.pos_y <= AREA_Y)
 			{
 				set_motors(STOP, 0);
-				state = HOME;
+				state = BACK_UP;
 			}
 			else
 				set_motors(STRAIGHT, STRAIGHT_SPEED);
-
 			break;
-		case HOME:
-			if(robot.pos_x < AREA_Y + TOUCH_DIST)
+
+		case BACK_UP:
+			if(robot.pos_y > AREA_Y + TOUCH_DIST)
+			{
+				set_motors(STOP, 0);
+				state = HOME;
+			}
+			else
 				set_motors(STRAIGHT, -STRAIGHT_SPEED);
-			/*else if(robot.angle > target_angle + ANGLE_TOLERANCE)
-				set_motors(ROTATION, -ROTATION_SPEED);
-			else if(robot.angle < target_angle - ANGLE_TOLERANCE)
-				set_motors(ROTATION, ROTATION_SPEED);*/
-
 			break;
+
+		case HOME:
+			if(robot.pos_x > 0 && robot.angle < 3*PI/2. - ANGLE_TOLERANCE)
+				set_motors(ROTATION, ROTATION_SPEED);
+			else if(robot.pos_x > 0 && robot.angle > 3*PI/2. + ANGLE_TOLERANCE)
+				set_motors(ROTATION, -ROTATION_SPEED);
+			else if(robot.pos_x > 0)
+				set_motors(STRAIGHT, STRAIGHT_SPEED);
+
+			else if(robot.pos_y > 0 && robot.angle < PI - ANGLE_TOLERANCE)
+				set_motors(ROTATION, ROTATION_SPEED);
+			else if(robot.pos_y > 0 && robot.angle > PI + ANGLE_TOLERANCE)
+				set_motors(ROTATION, -ROTATION_SPEED);
+			else if(robot.pos_y > 0)
+				set_motors(STRAIGHT, STRAIGHT_SPEED);
+
+			else if(robot.angle < - ANGLE_TOLERANCE)
+				set_motors(ROTATION, ROTATION_SPEED);
+			else if(robot.angle > ANGLE_TOLERANCE)
+				set_motors(ROTATION, -ROTATION_SPEED);
+			else
+			{
+				reset_color();
+				set_motors(STOP,0);
+				scan_speed = SCAN_SPEED;
+				fineangle = 0;
+
+				robot.progress++;
+				if(robot.progress >= 3)
+					state = DONE;
+				else
+					state = SCAN;
+
+			}
+			break;
+
+		case DONE:
 		default:
 			;
+			break;
 		}
 
 		chThdSleepUntilWindowed(time, time + MS2ST(PERIOD));
