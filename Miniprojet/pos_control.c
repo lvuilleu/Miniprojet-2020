@@ -34,13 +34,13 @@ typedef enum {
 	BACK_UP,
 	HOME,
 	DONE
-} states;
+} state_t;
 
 typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_direction
 	STRAIGHT,
 	ROTATION,
 	STOP,
-} motors_states;
+} motors_state_t;
 
 #define DEBUG				1
 #define PI					3.1415926536f // or M_PI from math.h
@@ -66,30 +66,30 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define MINFINEANGLE		0.7 //rad
 #define PHOTO_DIST			200 //mm
 
-struct robot_t{
+typedef struct{
 	float pos_x;
 	float pos_y;
 	float angle;
-	uint8_t motor_state;
+	motors_state_t motor_state;
 	uint8_t progress;
-};
+} robot_t;
 
-static struct robot_t robot;
+static robot_t robot;
 
-struct cylinder_t{
+typedef struct {
 	uint16_t pos_x;
 	uint16_t pos_y;
-	uint8_t color;
-};
+	colors_detected_t color;
+} cylinder_t;
 
-static struct cylinder_t cylinder;
+static cylinder_t cylinder;
 
 
 float get_angle(void){
 	return ((float)(right_motor_get_pos()*2*WHEEL_PERIMETER)/(float)(WHEEL_DISTANCE*NSTEP_ONE_TURN));
 }
 
-void set_motors(uint8_t motors_state, int speed){
+void set_motors(motors_state_t motors_state, int speed){
 	switch(motors_state){
 		case STRAIGHT:
 			right_motor_set_speed(speed);
@@ -129,17 +129,19 @@ void new_coord_and_angle(void){
 
 uint16_t calculate_positioning(void) {
 	uint16_t area_x = 0;
-		switch(cylinder.color) {
-			case RED:
-				area_x = RED_AREA;
-				break;
-			case GREEN:
-				area_x = GREEN_AREA;
-				break;
-			case BLUE:
-				area_x = BLUE_AREA;
-				break;
-		}
+	switch(cylinder.color) {
+		case RED:
+			area_x = RED_AREA;
+			break;
+		case GREEN:
+			area_x = GREEN_AREA;
+			break;
+		case BLUE:
+			area_x = BLUE_AREA;
+			break;
+		default:
+			;
+	}
 
 	return (cylinder.pos_x + (float)((robot.pos_y - cylinder.pos_y)*(cylinder.pos_x - area_x))/(float)(cylinder.pos_y - AREA_Y));
 }
@@ -156,6 +158,8 @@ float calculate_target_angle(void) {
 		case BLUE:
 			area_x = BLUE_AREA;
 			break;
+		default:
+			;
 	}
 
 	return atanf((float)(cylinder.pos_x - area_x)/(float)(cylinder.pos_y - AREA_Y));
@@ -168,7 +172,7 @@ static THD_FUNCTION(PosControl, arg) {
     (void)arg;
 
     systime_t time;
-    static uint8_t state = WAIT;
+    static state_t state = WAIT;
     static int scan_speed = SCAN_SPEED;
 
     static uint16_t y_target = 0;
@@ -310,7 +314,6 @@ static THD_FUNCTION(PosControl, arg) {
 			break;
 
 		case SIDESTEP:
-			// evtl. ds ganze ine funktion wird denn aber gloubs kompliziert
 			if(robot.angle > ANGLE_TOLERANCE)
 				set_motors(ROTATION, -ROTATION_SPEED);
 			else if(robot.angle < -ANGLE_TOLERANCE)

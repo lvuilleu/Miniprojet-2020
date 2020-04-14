@@ -28,7 +28,7 @@
 static BSEMAPHORE_DECL(image_ready_sem, TRUE);
 static BSEMAPHORE_DECL(take_img_sem, TRUE);
 
-static uint8_t detected_color = NO_COLOR;
+static colors_detected_t detected_color = NO_COLOR;
 
 static THD_WORKING_AREA(waCaptureImage, 256);
 static THD_FUNCTION(CaptureImage, arg) {
@@ -150,7 +150,7 @@ void take_image(void){
 	return;
 }
 
-uint8_t get_color(void){
+colors_detected_t get_color(void){
 	return detected_color;
 }
 
@@ -175,7 +175,7 @@ static THD_FUNCTION(LEDControl, arg) {
     chRegSetThreadName(__FUNCTION__);
     (void)arg;
 
-    static uint8_t old_color = NB_COLOR;
+    static colors_detected_t old_color = NB_COLOR;
 
     while(1){
     	if(detected_color != old_color)
@@ -199,6 +199,8 @@ static THD_FUNCTION(LEDControl, arg) {
     			set_led(LED1, ON);
     			set_led(LED5, ON);
     			break;
+    		default:
+    			;
     		}
     	}
     	if(detected_color == NO_COLOR)
