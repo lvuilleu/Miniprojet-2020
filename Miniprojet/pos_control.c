@@ -27,6 +27,7 @@ typedef enum {
 	FINESCANRIGHT,
 	FINESCANLEFT,
 	DETECT_COLOR,
+	DODGE,
 	SIDESTEP,
 	POSITIONING,
 	TOUCH,
@@ -50,21 +51,25 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define WHEEL_PERIMETER		(PI*42.5) // [mm]
 #define PERIOD				10 // 100 Hz
 #define SCAN_DIST			1000 // mm
-#define TOUCH_DIST			200 // mm
+#define TOUCH_DIST			170 // mm
 #define FINE_DIST 			200 //mm
-#define ROTATION_SPEED		500 // steps/s
+#define ROTATION_SPEED		200 // steps/s
 #define STRAIGHT_SPEED		500 // steps/s
 #define SCAN_SPEED			200 //steps/s
-#define ANGLE_TOLERANCE		0.03 // -> 0.57°
+#define ANGLE_TOLERANCE		0.02 // -> 0.57°
 #define DIST_TOLERANCE		1 // mm
-#define RED_AREA			100 // mm
-#define GREEN_AREA			2*RED_AREA
-#define BLUE_AREA			3*RED_AREA
-#define AREA_Y				0 // mm
-#define SIDESTEP_DIST		150 // mm
+#define MEASURE_TOLERANCE	10 //mm
+#define RED_AREA			200 // mm
+#define GREEN_AREA			300 //mm
+#define BLUE_AREA			400 //mm
+#define AREA_Y				-50 // mm
+#define SIDESTEP_DIST		100 // mm
 #define CYLINDER_RADIUS 	30 //mm
+#define ROBOT_R				37 // mm
 #define MINFINEANGLE		0.7 //rad
 #define PHOTO_DIST			200 //mm
+#define MIN_DIST			100 //mm
+#define CALIBRATION			-50 //mm
 
 typedef struct{
 	float pos_x;
@@ -143,7 +148,7 @@ uint16_t calculate_positioning(void) {
 			;
 	}
 
-	return (cylinder.pos_x + (float)((robot.pos_y - cylinder.pos_y)*(cylinder.pos_x - area_x))/(float)(cylinder.pos_y - AREA_Y));
+	return (cylinder.pos_x + (float)((SIDESTEP_DIST)*(cylinder.pos_x - area_x))/(float)(cylinder.pos_y - AREA_Y));
 }
 
 float calculate_target_angle(void) {
@@ -165,7 +170,7 @@ float calculate_target_angle(void) {
 	return atanf((float)(cylinder.pos_x - area_x)/(float)(cylinder.pos_y - AREA_Y));
 }
 
-static THD_WORKING_AREA(waPosControl, 256);
+static THD_WORKING_AREA(waPosControl, 350);
 static THD_FUNCTION(PosControl, arg) {
 
     chRegSetThreadName(__FUNCTION__);
@@ -277,40 +282,76 @@ static THD_FUNCTION(PosControl, arg) {
 
 		case FINESCANLEFT:
 			;
-			static uint16_t mindist = TOUCH_DIST;
+			//static uint16_t mindist = TOUCH_DIST;
 			if((VL53L0X_get_dist_mm() < FINE_DIST) || (robot.angle - fineangle < MINFINEANGLE))
 			{
 				set_motors(ROTATION, SCAN_SPEED);
-				if(VL53L0X_get_dist_mm() < mindist)
-					mindist = VL53L0X_get_dist_mm();
+				//if(VL53L0X_get_dist_mm() < mindist)
+					//mindist = VL53L0X_get_dist_mm();
 			}
 			else
 			{
-				fineangle += robot.angle;
 				set_motors(STOP, 0);
-				fineangle /= 2.;
-				chprintf((BaseSequentialStream *)&SD3, "fineangle = %f, mindist = %d\n", fineangle, mindist);
-				cylinder.pos_x = robot.pos_x + sin(fineangle)*(float)(mindist+CYLINDER_RADIUS);
-				cylinder.pos_y = robot.pos_y + cos(fineangle)*(float)(mindist+CYLINDER_RADIUS);
-				chprintf((BaseSequentialStream *)&SD3, "angle = %f, pos_x = %f, pos_y = %f cyl_x = %d, cyl_y = %d\n", robot.angle, robot.pos_x, robot.pos_y, cylinder.pos_x, cylinder.pos_y);
+				fineangle += robot.angle;
+				fineangle /= 2.; //Add the 2 angles and div by 2 to get middle angle
+				chprintf((BaseSequentialStream *)&SD3, "Fineangle = %f\n", fineangle);
+				//chprintf((BaseSequentialStream *)&SD3, "fineangle = %f, mindist = %d\n", fineangle, mindist);
+				//cylinder.pos_x = robot.pos_x + sin(fineangle)*(float)(mindist+CYLINDER_RADIUS+ROBOT_R);
+				//cylinder.pos_y = robot.pos_y + cos(fineangle)*(float)(mindist+CYLINDER_RADIUS+ROBOT_R);
+				//chprintf((BaseSequentialStream *)&SD3, "angle = %f, pos_x = %f, pos_y = %f cyl_x = %d, cyl_y = %d\n", robot.angle, robot.pos_x, robot.pos_y, cylinder.pos_x, cylinder.pos_y);
 				state = DETECT_COLOR;
 			}
 			break;
 
 		case DETECT_COLOR:
-			if(robot.angle > fineangle)
+			if(robot.angle > fineangle + ANGLE_TOLERANCE)
 				set_motors(ROTATION, -SCAN_SPEED);
 			else if(VL53L0X_get_dist_mm() < PHOTO_DIST)
 			{
+				if(cylinder.pos_y == 0 && cylinder.pos_x == 0) //Calculate position of cylinder
+				{
+					chprintf((BaseSequentialStream *)&SD3, "Hello\n");
+					uint16_t dist = VL53L0X_get_dist_mm();
+					chThdSleepMilliseconds(100); //Wait for new measurement
+					uint16_t dist2 = VL53L0X_get_dist_mm();
+					while(dist2 > dist + MEASURE_TOLERANCE || dist2 < dist-MEASURE_TOLERANCE) //get 2 similar measurements
+					{
+						chThdSleepMilliseconds(100);
+						dist = dist2;
+						dist2 = VL53L0X_get_dist_mm();
+					}
+					dist = (dist + dist2)/2;
+					chprintf((BaseSequentialStream *)&SD3, "fineangle = %f, mindist = %d\n", fineangle, dist);
+					cylinder.pos_x = robot.pos_x + sin(robot.angle)*(float)(dist+CYLINDER_RADIUS+ROBOT_R+CALIBRATION);
+					cylinder.pos_y = robot.pos_y + cos(robot.angle)*(float)(dist+CYLINDER_RADIUS+ROBOT_R+CALIBRATION);
+				}
+
 				set_motors(STRAIGHT, -STRAIGHT_SPEED);
 			}
 			else
 			{
 				take_image();
-				state = SIDESTEP;
+				if(cylinder.pos_x - robot.pos_x > MIN_DIST)
+					state = SIDESTEP;
+				else
+					state = DODGE;
 				y_target = cylinder.pos_y + SIDESTEP_DIST;
-				chThdSleepMilliseconds(100);
+
 			}
+			break;
+
+		case DODGE:
+			if(robot.angle > PI/2+ANGLE_TOLERANCE)
+				set_motors(ROTATION, -ROTATION_SPEED);
+			else if(robot.angle < PI/2 -ANGLE_TOLERANCE)
+				set_motors(ROTATION, ROTATION_SPEED);
+			else if(cylinder.pos_x - robot.pos_x > MIN_DIST)
+			{
+				state = SIDESTEP;
+				set_motors(STOP, 0);
+			}
+			else
+				set_motors(STRAIGHT, -STRAIGHT_SPEED);
 			break;
 
 		case SIDESTEP:
@@ -340,7 +381,7 @@ static THD_FUNCTION(PosControl, arg) {
 				set_motors(STOP, 0);
 				x_target = 0;		// nid unbedingt nötig
 				target_angle = PI + calculate_target_angle(); // positive winkel
-				state = TOUCH;
+				state = PUSH; ////////ADAPT
 			}
 			else if (x_target < robot.pos_x)
 				set_motors(STRAIGHT, -STRAIGHT_SPEED);
@@ -348,7 +389,7 @@ static THD_FUNCTION(PosControl, arg) {
 				set_motors(STRAIGHT, STRAIGHT_SPEED);
 			break;
 
-		case TOUCH:
+		/*case TOUCH:
 			if(robot.angle > target_angle + ANGLE_TOLERANCE)
 				set_motors(ROTATION, -ROTATION_SPEED);
 			else if(robot.angle < target_angle - ANGLE_TOLERANCE)
@@ -360,14 +401,14 @@ static THD_FUNCTION(PosControl, arg) {
 			}
 			else
 				set_motors(STRAIGHT, STRAIGHT_SPEED);
-			break;
+			break;*/
 
 		case PUSH:
 			if(robot.angle > target_angle + ANGLE_TOLERANCE)
 				set_motors(ROTATION, -ROTATION_SPEED);
 			else if(robot.angle < target_angle - ANGLE_TOLERANCE)
 				set_motors(ROTATION, ROTATION_SPEED);
-			else if(robot.pos_y <= AREA_Y)
+			else if(robot.pos_y + (CYLINDER_RADIUS+ROBOT_R)*cos(robot.angle) <= AREA_Y)
 			{
 				set_motors(STOP, 0);
 				state = BACK_UP;
@@ -411,6 +452,8 @@ static THD_FUNCTION(PosControl, arg) {
 				set_motors(STOP,0);
 				scan_speed = SCAN_SPEED;
 				fineangle = 0;
+				cylinder.pos_x = 0;
+				cylinder.pos_y = 0;
 
 				robot.progress++;
 				if(robot.progress >= 3)
