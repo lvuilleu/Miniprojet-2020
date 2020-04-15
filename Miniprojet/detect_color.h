@@ -7,11 +7,11 @@ typedef enum{
 	GREEN,
 	BLUE,
 	NB_COLOR
-} Colors_detected;
+} colors_detected_t;
 
 void process_image_start(void);
 void take_image(void);
-uint8_t get_color(void);
+colors_detected_t get_color(void);
 void reset_color(void);
 
 void process_led_start(void);
