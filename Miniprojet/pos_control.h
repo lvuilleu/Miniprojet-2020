@@ -9,6 +9,7 @@
 #define POS_CONTROL_H_
 
 void pos_control_start(void);
+void testing_start(void);
 
 
 

@@ -45,10 +45,10 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 
 #define DEBUG				1
 #define PI					3.1415926536f // or M_PI from math.h
-#define WHEEL_DISTANCE		54.5f    //mm
+#define WHEEL_DISTANCE		55.5f    //mm
 #define PERIMETER_EPUCK		(PI * WHEEL_DISTANCE)
 #define NSTEP_ONE_TURN		1000 // number of step for 1 turn of the motor
-#define WHEEL_PERIMETER		(PI*42.5) // [mm]
+#define WHEEL_PERIMETER		(PI*42.1) // [mm]
 #define PERIOD				10 // 100 Hz
 #define SCAN_DIST			1000 // mm
 #define TOUCH_DIST			170 // mm
@@ -94,7 +94,26 @@ float get_angle(void){
 	return ((float)(right_motor_get_pos()*2*WHEEL_PERIMETER)/(float)(WHEEL_DISTANCE*NSTEP_ONE_TURN));
 }
 
+void new_coord_and_angle(void){
+	switch(robot.motor_state){
+	case ROTATION:
+		robot.angle += get_angle();
+		break;
+	case STRAIGHT: ;
+		//Huge errors if we use int due to rounding errors
+		float distance= ((float)right_motor_get_pos())/((float)NSTEP_ONE_TURN)*WHEEL_PERIMETER;
+		robot.pos_y += cos(robot.angle)*distance;
+		robot.pos_x += sin(robot.angle)*distance;
+		break;
+	case STOP:
+		break;
+	}
+	right_motor_set_pos(0);
+	left_motor_set_pos(0);
+}
+
 void set_motors(motors_state_t motors_state, int speed){
+	//new_coord_and_angle();
 	switch(motors_state){
 		case STRAIGHT:
 			right_motor_set_speed(speed);
@@ -112,24 +131,6 @@ void set_motors(motors_state_t motors_state, int speed){
 			robot.motor_state = STOP;
 			break;
 	}
-}
-
-void new_coord_and_angle(void){
-	switch(robot.motor_state){
-	case ROTATION:
-		robot.angle += get_angle();
-		break;
-	case STRAIGHT: ;
-		//Huge errors if we use int due to rounding errors
-		float distance= ((float)right_motor_get_pos())/((float)NSTEP_ONE_TURN)*WHEEL_PERIMETER;
-		robot.pos_y += cos(robot.angle)*distance;
-		robot.pos_x += sin(robot.angle)*distance;
-		break;
-	case STOP:
-		break;
-	}
-	right_motor_set_pos(0);
-	left_motor_set_pos(0);
 }
 
 uint16_t calculate_positioning(void) {
@@ -428,9 +429,9 @@ static THD_FUNCTION(PosControl, arg) {
 			break;
 
 		case HOME:
-			if(robot.pos_x > 0 && robot.angle < 3*PI/2. - ANGLE_TOLERANCE)
+			if(robot.pos_x > 0 && robot.angle < 3.*PI/2. - ANGLE_TOLERANCE)
 				set_motors(ROTATION, ROTATION_SPEED);
-			else if(robot.pos_x > 0 && robot.angle > 3*PI/2. + ANGLE_TOLERANCE)
+			else if(robot.pos_x > 0 && robot.angle > 3.*PI/2. + ANGLE_TOLERANCE)
 				set_motors(ROTATION, -ROTATION_SPEED);
 			else if(robot.pos_x > 0)
 				set_motors(STRAIGHT, STRAIGHT_SPEED);
@@ -475,7 +476,44 @@ static THD_FUNCTION(PosControl, arg) {
 
 }
 
+static THD_WORKING_AREA(watest, 350);
+static THD_FUNCTION(test, arg) {
+
+    chRegSetThreadName(__FUNCTION__);
+    (void)arg;
+
+    float angle= 0;
+
+    while(angle < 10. * PI){
+    	right_motor_set_pos(0);
+    	left_motor_set_pos(0);
+
+    	chThdSleepMilliseconds(10);
+
+    	if(get_selector() > 8)
+    	{
+    		chThdSleepMilliseconds(10);
+    		chprintf((BaseSequentialStream *)&SD3, "Pause \n");
+    		continue;
+    	}
+    	set_motors(ROTATION, ROTATION_SPEED);
+    	angle += get_angle();
+    	chprintf((BaseSequentialStream *)&SD3, "angle = %f\n", angle);
+    	if(angle > 10* PI)
+    	{
+    		set_motors(STOP, 0);
+    	}
+
+
+    }
+}
+
+
 void pos_control_start(void){
 	chThdCreateStatic(waPosControl, sizeof(waPosControl), NORMALPRIO + 1, PosControl, NULL); // priorität apasse
+}
+
+void testing_start(void){
+	chThdCreateStatic(watest, sizeof(watest), NORMALPRIO + 1, test, NULL);
 }
 
