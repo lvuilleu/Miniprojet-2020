@@ -7,6 +7,7 @@
 
 #include "ch.h"
 #include "hal.h"
+#include "usbcfg.h"
 
 #include <math.h>
 
@@ -89,6 +90,22 @@ typedef struct {
 
 static cylinder_t cylinder;
 
+static void timer12_start(void){
+    //General Purpose Timer configuration
+    //timer 12 is a 16 bit timer so we can measure time
+    //to about 65ms with a 1Mhz counter
+    static const GPTConfig gpt11cfg = {
+        1000000,        /* 1MHz timer clock in order to measure uS.*/
+        NULL,           /* Timer callback.*/
+        0,
+        0
+    };
+
+    gptStart(&GPTD11, &gpt11cfg);
+    //let the timer count to max value
+    gptStartContinuous(&GPTD11, 0xFFFF);
+}
+
 
 float get_angle(void){
 	return ((float)(right_motor_get_pos()*2*WHEEL_PERIMETER)/(float)(WHEEL_DISTANCE*NSTEP_ONE_TURN));
@@ -100,10 +117,19 @@ void new_coord_and_angle(void){
 		robot.angle += get_angle();
 		break;
 	case STRAIGHT: ;
-		//Huge errors if we use int due to rounding errors
+		//Big errors if we use int due to rounding errors
 		float distance= ((float)right_motor_get_pos())/((float)NSTEP_ONE_TURN)*WHEEL_PERIMETER;
+
+		volatile uint16_t time = 0;
+		chSysLock();
+		//reset the timer counter
+		GPTD11.tim->CNT = 0;
 		robot.pos_y += cos(robot.angle)*distance;
 		robot.pos_x += sin(robot.angle)*distance;
+		time = GPTD11.tim->CNT;
+		chSysUnlock();
+		chprintf((BaseSequentialStream *)&SD3, "time=%dus\n", time);
+
 		break;
 	case STOP:
 		break;
@@ -177,13 +203,15 @@ static THD_FUNCTION(PosControl, arg) {
     chRegSetThreadName(__FUNCTION__);
     (void)arg;
 
+    timer12_start();
+
     systime_t time;
     static state_t state = WAIT;
     static int scan_speed = SCAN_SPEED;
 
     static uint16_t y_target = 0;
     static uint16_t x_target = 0;
-    float target_angle = 0.;
+    static float target_angle = 0.;
 
     static float fineangle = 0;
 
@@ -203,8 +231,10 @@ static THD_FUNCTION(PosControl, arg) {
     {
 		time = chVTGetSystemTime();
 
+		//Start state machine
 		if(get_selector() > 8 && state == WAIT)
 			state = SCAN;
+		//Stop state machine
 		if(get_selector() < 8)
 		{
 			state = WAIT;
@@ -237,19 +267,19 @@ static THD_FUNCTION(PosControl, arg) {
 			set_motors(STOP, 0);
 			break;
 
-			case SCAN:
-				if(VL53L0X_get_dist_mm() < SCAN_DIST)
-				{
-					state = APPROACH;
-				}
-				else
-				{
-					if(robot.angle > PI/2.)
-						scan_speed = -SCAN_SPEED;
-					if(robot.angle < 0)
-						scan_speed = SCAN_SPEED;
-					set_motors(ROTATION, scan_speed);
-				}
+		case SCAN:
+			if(VL53L0X_get_dist_mm() < SCAN_DIST)
+			{
+				state = APPROACH;
+			}
+			else
+			{
+				if(robot.angle > PI/2.)
+					scan_speed = -SCAN_SPEED;
+				if(robot.angle < 0)
+					scan_speed = SCAN_SPEED;
+				set_motors(ROTATION, scan_speed);
+			}
 			break;
 
 		case APPROACH:
@@ -295,11 +325,6 @@ static THD_FUNCTION(PosControl, arg) {
 				set_motors(STOP, 0);
 				fineangle += robot.angle;
 				fineangle /= 2.; //Add the 2 angles and div by 2 to get middle angle
-				chprintf((BaseSequentialStream *)&SD3, "Fineangle = %f\n", fineangle);
-				//chprintf((BaseSequentialStream *)&SD3, "fineangle = %f, mindist = %d\n", fineangle, mindist);
-				//cylinder.pos_x = robot.pos_x + sin(fineangle)*(float)(mindist+CYLINDER_RADIUS+ROBOT_R);
-				//cylinder.pos_y = robot.pos_y + cos(fineangle)*(float)(mindist+CYLINDER_RADIUS+ROBOT_R);
-				//chprintf((BaseSequentialStream *)&SD3, "angle = %f, pos_x = %f, pos_y = %f cyl_x = %d, cyl_y = %d\n", robot.angle, robot.pos_x, robot.pos_y, cylinder.pos_x, cylinder.pos_y);
 				state = DETECT_COLOR;
 			}
 			break;
@@ -311,9 +336,8 @@ static THD_FUNCTION(PosControl, arg) {
 			{
 				if(cylinder.pos_y == 0 && cylinder.pos_x == 0) //Calculate position of cylinder
 				{
-					chprintf((BaseSequentialStream *)&SD3, "Hello\n");
 					uint16_t dist = VL53L0X_get_dist_mm();
-					chThdSleepMilliseconds(100); //Wait for new measurement
+					chThdSleepMilliseconds(50); //Wait for new measurement
 					uint16_t dist2 = VL53L0X_get_dist_mm();
 					while(dist2 > dist + MEASURE_TOLERANCE || dist2 < dist-MEASURE_TOLERANCE) //get 2 similar measurements
 					{
@@ -322,7 +346,6 @@ static THD_FUNCTION(PosControl, arg) {
 						dist2 = VL53L0X_get_dist_mm();
 					}
 					dist = (dist + dist2)/2;
-					chprintf((BaseSequentialStream *)&SD3, "fineangle = %f, mindist = %d\n", fineangle, dist);
 					cylinder.pos_x = robot.pos_x + sin(robot.angle)*(float)(dist+CYLINDER_RADIUS+ROBOT_R+CALIBRATION);
 					cylinder.pos_y = robot.pos_y + cos(robot.angle)*(float)(dist+CYLINDER_RADIUS+ROBOT_R+CALIBRATION);
 				}
@@ -493,7 +516,6 @@ static THD_FUNCTION(test, arg) {
     	if(get_selector() > 8)
     	{
     		chThdSleepMilliseconds(10);
-    		chprintf((BaseSequentialStream *)&SD3, "Pause \n");
     		continue;
     	}
     	set_motors(ROTATION, ROTATION_SPEED);

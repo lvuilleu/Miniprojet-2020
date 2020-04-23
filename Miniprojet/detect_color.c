@@ -159,7 +159,9 @@ void reset_color(void){
 	return;
 }
 
-//LED control functions
+/////////////////////////
+//LED control functions//
+/////////////////////////
 
 void set_all_LED(uint8_t red, uint8_t green, uint8_t blue){
 	set_rgb_led(LED2, red,green,blue);
