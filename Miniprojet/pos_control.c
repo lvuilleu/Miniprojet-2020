@@ -13,7 +13,7 @@
 
 #include <pos_control.h>
 #include <motors.h>
-#include <sensors/VL53L0X/VL53L0X.h>
+#include <tof.h>
 #include <detect_color.h>
 #include <selector.h>
 #include <main.h>
@@ -253,7 +253,7 @@ static THD_FUNCTION(PosControl, arg) {
 			break;
 
 			case SCAN:
-				if(VL53L0X_get_dist_mm() < SCAN_DIST)
+				if(TOF_get_dist_mm() < SCAN_DIST)
 				{
 					state = APPROACH;
 				}
@@ -268,12 +268,12 @@ static THD_FUNCTION(PosControl, arg) {
 			break;
 
 		case APPROACH:
-			if(VL53L0X_get_dist_mm() < TOUCH_DIST)
+			if(TOF_get_dist_mm() < TOUCH_DIST)
 			{
 				set_motors(STOP, 0);
 				state = FINESCANRIGHT;
 			}
-			else if(VL53L0X_get_dist_mm() > SCAN_DIST)
+			else if(TOF_get_dist_mm() > SCAN_DIST)
 			{
 				set_motors(STOP, 0);
 				state = SCAN;
@@ -284,7 +284,7 @@ static THD_FUNCTION(PosControl, arg) {
 			break;
 
 		case FINESCANRIGHT:
-			if(VL53L0X_get_dist_mm() < FINE_DIST)
+			if(TOF_get_dist_mm() < FINE_DIST)
 			{
 				set_motors(ROTATION, -SCAN_SPEED);
 			}
@@ -297,7 +297,7 @@ static THD_FUNCTION(PosControl, arg) {
 			break;
 
 		case FINESCANLEFT:
-			if((VL53L0X_get_dist_mm() < FINE_DIST) || (robot.angle - fineangle < MINFINEANGLE))
+			if((TOF_get_dist_mm() < FINE_DIST) || (robot.angle - fineangle < MINFINEANGLE))
 			{
 				set_motors(ROTATION, SCAN_SPEED);
 			}

@@ -14,7 +14,7 @@
 #include <motors.h>
 #include <camera/po8030.h>
 #include <chprintf.h>
-#include <sensors/VL53L0X/VL53L0X.h>
+#include <tof.h>
 #include <leds.h>
 #include <spi_comm.h>
 
@@ -60,7 +60,7 @@ int main(void)
 	process_image_start();
 
 	//Inits the TOF sensor
-	VL53L0X_start();
+	TOF_start();
 
 	//init pos_control
 	motors_init();
