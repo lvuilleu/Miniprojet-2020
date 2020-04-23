@@ -100,7 +100,7 @@ void new_coord_and_angle(void){
 		robot.angle += get_angle();
 		break;
 	case STRAIGHT: ;
-		//Huge errors if we use int due to rounding errors
+		//Big errors if we use int due to rounding errors
 		float distance= ((float)right_motor_get_pos())/((float)NSTEP_ONE_TURN)*WHEEL_PERIMETER;
 		robot.pos_y += cos(robot.angle)*distance;
 		robot.pos_x += sin(robot.angle)*distance;
