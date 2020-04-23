@@ -34,7 +34,8 @@ typedef enum {
 	TOUCH,
 	PUSH,
 	BACK_UP,
-	HOME,
+	HOME_X,
+	HOME_Y,
 	DONE
 } state_t;
 
@@ -54,6 +55,7 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define SCAN_DIST			1000 // mm
 #define TOUCH_DIST			170 // mm
 #define FINE_DIST 			200 //mm
+#define HOME_OFFSET			50 //mm
 #define ROTATION_SPEED		200 // steps/s
 #define STRAIGHT_SPEED		500 // steps/s
 #define SCAN_SPEED			200 //steps/s
@@ -430,29 +432,38 @@ static THD_FUNCTION(PosControl, arg) {
 			break;
 
 		case BACK_UP:
-			if(robot.pos_y > AREA_Y + TOUCH_DIST)
+			if(robot.pos_y > HOME_OFFSET)
 			{
 				set_motors(STOP, 0);
-				state = HOME;
+				state = HOME_X;
 			}
 			else
 				set_motors(STRAIGHT, -STRAIGHT_SPEED);
 			break;
 
-		case HOME:
-			if(robot.pos_x > 0 && orientation(PI/2.))
-			{
+		case HOME_X:
+			if(orientation(3*PI/2.) && TOF_get_dist_mm() > (HOME_DIST + DIST_TOLERANCE))
+				set_motors(STRAIGHT, STRAIGHT_SPEED);
+			else if(TOF_get_dist_mm() < (HOME_DIST - DIST_TOLERANCE))
 				set_motors(STRAIGHT, -STRAIGHT_SPEED);
+			else
+			{
+				set_motors(STOP, 0);
+				robot.pos_x = 0;
+				state = HOME_Y;
 			}
+			break;
 
-			else if(robot.pos_x < 0 && robot.pos_y > 0 && orientation(0.))
-			{
+		case HOME_Y:
+			if(orientation(PI/2.) && TOF_get_dist_mm() > (HOME_DIST + DIST_TOLERANCE))
+				set_motors(STRAIGHT, STRAIGHT_SPEED);
+			else if(TOF_get_dist_mm() < (HOME_DIST - DIST_TOLERANCE))
 				set_motors(STRAIGHT, -STRAIGHT_SPEED);
-			}
-			else if(robot.pos_x < 0 && robot.pos_y < 0)
+			else
 			{
-				reset_color();
 				set_motors(STOP,0);
+				robot.pos_y = 0;
+				reset_color();
 				scan_speed = SCAN_SPEED;
 				fineangle = 0;
 				cylinder.pos_x = 0;
@@ -463,7 +474,6 @@ static THD_FUNCTION(PosControl, arg) {
 					state = DONE;
 				else
 					state = SCAN;
-
 			}
 			break;
 
