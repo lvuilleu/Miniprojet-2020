@@ -10,7 +10,10 @@
 #include "i2c_bus.h"
 #include "tof.h"
 
+#define CALIB_TOLERANCE 5
+
 static uint16_t dist_mm = 0;
+static uint16_t calibration_value = 0;
 
 static THD_WORKING_AREA(waTOF_Thd, 512);
 static THD_FUNCTION(TOF_Thd, arg) {
@@ -35,10 +38,11 @@ static THD_FUNCTION(TOF_Thd, arg) {
     //while (chThdShouldTerminateX() == false) {
 	while(1)
 	{
-    		VL53L0X_getLastMeasure(&device);
+    	VL53L0X_getLastMeasure(&device);
    		if(device.Data.LastRangeMeasure.RangeMilliMeter)
    			dist_mm = device.Data.LastRangeMeasure.RangeMilliMeter;
-		chThdSleepMilliseconds(50);
+   		chBSemSignal(&measure_sem);
+		chThdSleepMilliseconds(MEASURE_PERIOD);
     }
 }
 
@@ -53,5 +57,23 @@ void TOF_start(void) {
 
 
 uint16_t TOF_get_dist_mm(void) {
-	return dist_mm;
+	return dist_mm - calibration_value;
+}
+
+void TOF_calibrate(void){
+	uint16_t measure1 = TOF_get_dist_mm();
+	chBSemWait(&measure_sem);
+	uint16_t measure2 = TOF_get_dist_mm();
+	while(measure1 - measure2 > CALIB_TOLERANCE || measure2 - measure1 > CALIB_TOLERANCE)
+	{
+		measure1 = measure2;
+		chBSemWait(&measure_sem);
+		measure2 = TOF_get_dist_mm();
+	}
+	calibration_value = (measure1+measure2)/2 - HOME_DIST;
+}
+
+void TOF_wait_measure(void){
+	chBSemWait(&measure_sem); //To deactivate old Sem
+	chBSemWait(&measure_sem);
 }
