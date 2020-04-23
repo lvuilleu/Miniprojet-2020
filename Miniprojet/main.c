@@ -19,6 +19,7 @@
 #include <spi_comm.h>
 
 #include <detect_color.h>
+#include <ledControl.h>
 #include <pos_control.h>
 
 

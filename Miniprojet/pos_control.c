@@ -62,7 +62,7 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define RED_AREA			200 // mm
 #define GREEN_AREA			300 //mm
 #define BLUE_AREA			400 //mm
-#define AREA_Y				-50 // mm
+#define AREA_Y				-100 // mm
 #define SIDESTEP_DIST		100 // mm
 #define CYLINDER_RADIUS 	30 //mm
 #define ROBOT_R				37 // mm
@@ -313,22 +313,20 @@ static THD_FUNCTION(PosControl, arg) {
 		case DETECT_COLOR:
 			if(orientation(fineangle))
 			{
-				 if(VL53L0X_get_dist_mm() < PHOTO_DIST)
+				 if(TOF_get_dist_mm() < PHOTO_DIST)
 				{
 					if(cylinder.pos_y == 0 && cylinder.pos_x == 0) //Calculate position of cylinder
 					{
-						chprintf((BaseSequentialStream *)&SD3, "Hello\n");
-						uint16_t dist = VL53L0X_get_dist_mm();
+						uint16_t dist = TOF_get_dist_mm();
 						chThdSleepMilliseconds(100); //Wait for new measurement
-						uint16_t dist2 = VL53L0X_get_dist_mm();
+						uint16_t dist2 = TOF_get_dist_mm();
 						while(dist2 > dist + MEASURE_TOLERANCE || dist2 < dist-MEASURE_TOLERANCE) //get 2 similar measurements
 						{
 							chThdSleepMilliseconds(100);
 							dist = dist2;
-							dist2 = VL53L0X_get_dist_mm();
+							dist2 = TOF_get_dist_mm();
 						}
 						dist = (dist + dist2)/2;
-						chprintf((BaseSequentialStream *)&SD3, "fineangle = %f, mindist = %d\n", fineangle, dist);
 						cylinder.pos_x = robot.pos_x + sin(robot.angle)*(float)(dist+CYLINDER_RADIUS+ROBOT_R+CALIBRATION);
 						cylinder.pos_y = robot.pos_y + cos(robot.angle)*(float)(dist+CYLINDER_RADIUS+ROBOT_R+CALIBRATION);
 					}
