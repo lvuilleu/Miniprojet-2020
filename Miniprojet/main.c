@@ -1,4 +1,4 @@
-//chprintf((BaseSequentialStream *)&SDU1, "dist=%d mm\n", dist);
+//chprintf((BaseSequentialStream *)&SD3, "dist=%d mm\n", dist);
 
 
 #include <stdio.h>
@@ -77,7 +77,7 @@ int main(void)
     /* Infinite loop. */
     while (1) {
     	//take_image();
-    	//uint16_t dist = VL53L0X_get_dist_mm();
+    	//uint16_t dist = TOF_get_dist_mm();
     	//chprintf((BaseSequentialStream *)&SD3, "dist=%d mm\n", dist);
         chThdSleepMilliseconds(1000);
         //chprintf((BaseSequentialStream *)&SD3, "Colour=%d\n", get_color());
