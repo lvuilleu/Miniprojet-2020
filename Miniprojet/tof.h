@@ -8,6 +8,8 @@
 #ifndef TOF_H_
 #define TOF_H_
 
+#define HOME_DIST	80
+
 void TOF_start(void);
 
 uint16_t TOF_get_dist_mm(void);
