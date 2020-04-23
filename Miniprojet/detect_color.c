@@ -148,4 +148,3 @@ void reset_color(void){
 	detected_color = NO_COLOR;
 	return;
 }
-
