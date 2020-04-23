@@ -275,7 +275,7 @@ static THD_FUNCTION(PosControl, arg) {
 		case SCAN:
 			;
 			uint16_t measure1 = TOF_get_dist_mm();
-			if(measure1 < SCAN_DIST)
+			if(measure1 < SCAN_DIST && robot.angle < PI/2.)
 			{
 				TOF_wait_measure();
 				if((measure1 - TOF_get_dist_mm() > SCAN_DIST_TOLERANCE) || (TOF_get_dist_mm() - measure1 > SCAN_DIST_TOLERANCE))
@@ -442,38 +442,41 @@ static THD_FUNCTION(PosControl, arg) {
 			break;
 
 		case HOME_X:
-			if(orientation(3*PI/2.) && TOF_get_dist_mm() > (HOME_DIST + DIST_TOLERANCE))
-				set_motors(STRAIGHT, STRAIGHT_SPEED);
-			else if(TOF_get_dist_mm() < (HOME_DIST - DIST_TOLERANCE))
-				set_motors(STRAIGHT, -STRAIGHT_SPEED);
-			else
-			{
-				set_motors(STOP, 0);
-				robot.pos_x = 0;
-				state = HOME_Y;
-			}
+			if(orientation(3*PI/2.)){
+					if(TOF_get_dist_mm() > HOME_DIST)
+						set_motors(STRAIGHT, STRAIGHT_SPEED);
+
+					else
+					{
+						set_motors(STOP, 0);
+						robot.pos_x = 0;
+						state = HOME_Y;
+					}
+				}
 			break;
 
 		case HOME_Y:
-			if(orientation(PI/2.) && TOF_get_dist_mm() > (HOME_DIST + DIST_TOLERANCE))
-				set_motors(STRAIGHT, STRAIGHT_SPEED);
-			else if(TOF_get_dist_mm() < (HOME_DIST - DIST_TOLERANCE))
-				set_motors(STRAIGHT, -STRAIGHT_SPEED);
-			else
+			if(orientation(PI))
 			{
-				set_motors(STOP,0);
-				robot.pos_y = 0;
-				reset_color();
-				scan_speed = SCAN_SPEED;
-				fineangle = 0;
-				cylinder.pos_x = 0;
-				cylinder.pos_y = 0;
+				if(TOF_get_dist_mm() > (HOME_DIST + DIST_TOLERANCE))
+				set_motors(STRAIGHT, STRAIGHT_SPEED);
 
-				robot.progress++;
-				if(robot.progress >= 3)
-					state = DONE;
 				else
-					state = SCAN;
+				{
+					set_motors(STOP,0);
+					robot.pos_y = 0;
+					reset_color();
+					scan_speed = SCAN_SPEED;
+					fineangle = 0;
+					cylinder.pos_x = 0;
+					cylinder.pos_y = 0;
+
+					robot.progress++;
+					if(robot.progress >= 3)
+						state = DONE;
+					else
+						state = SCAN;
+				}
 			}
 			break;
 
