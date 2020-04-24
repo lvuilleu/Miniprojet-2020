@@ -12,8 +12,13 @@
 
 #define CALIB_TOLERANCE 5
 
+static BSEMAPHORE_DECL(measure_sem, TRUE);
+
 static uint16_t dist_mm = 0;
 static uint16_t calibration_value = 0;
+
+//We need a distance measurement more often than every 100ms
+//Therefore we more or less copied the function from the e-puck2_main-processor and made some minor changes
 
 static THD_WORKING_AREA(waTOF_Thd, 512);
 static THD_FUNCTION(TOF_Thd, arg) {
@@ -54,12 +59,12 @@ void TOF_start(void) {
 	chThdCreateStatic(waTOF_Thd, sizeof(waTOF_Thd), NORMALPRIO + 10, TOF_Thd, NULL);
 }
 
-
-
 uint16_t TOF_get_dist_mm(void) {
 	return dist_mm - calibration_value;
 }
 
+//Since we had rather big differences of the measured values when restarting the robot we implemented a basic calibration
+//At the beginning of the program we face the wall which is at a distance of 80mm from the robot
 void TOF_calibrate(void){
 	uint16_t measure1 = TOF_get_dist_mm();
 	chBSemWait(&measure_sem);
@@ -74,6 +79,8 @@ void TOF_calibrate(void){
 }
 
 void TOF_wait_measure(void){
-	chBSemWait(&measure_sem); //To deactivate old Sem
+	//To deactivate Semaphore (we only rarely need multiple measurements at a time therefore it will probably still be activated)
+	chBSemWait(&measure_sem);
+	//Wait for new measurement
 	chBSemWait(&measure_sem);
 }

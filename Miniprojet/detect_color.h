@@ -10,10 +10,9 @@ typedef enum{
 } colors_detected_t;
 
 void process_image_start(void);
+
 void take_image(void);
 colors_detected_t get_color(void);
 void reset_color(void);
-
-
 
 #endif

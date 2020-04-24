@@ -47,33 +47,41 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 
 #define DEBUG				0
 #define PI					3.1415926536f // or M_PI from math.h
+
 #define WHEEL_DISTANCE		55.5f    //mm
 #define PERIMETER_EPUCK		(PI * WHEEL_DISTANCE)
-#define NSTEP_ONE_TURN		1000 // number of step for 1 turn of the motor
 #define WHEEL_PERIMETER		(PI*42.1) // [mm]
+#define NSTEP_ONE_TURN		1000 // number of step for 1 turn of the motor
+#define CYLINDER_RADIUS 	30 //mm
+#define ROBOT_R				37 // mm
+
 #define PERIOD				10 // 100 Hz
+
 #define SCAN_DIST			1000 // mm
 #define TOUCH_DIST			170 // mm
 #define FINE_DIST 			200 //mm
+#define SIDESTEP_DIST		100 // mm
+#define PHOTO_DIST			200 //mm
+#define MIN_DIST			100 //mm
+
 #define HOME_OFFSET			50 //mm
+#define AREA_Y				-100 // mm
+
 #define ROTATION_SPEED		200 // steps/s
 #define STRAIGHT_SPEED		500 // steps/s
 #define SCAN_SPEED			200 //steps/s
+
 #define ANGLE_TOLERANCE		0.02 // -> 0.57°
 #define DIST_TOLERANCE		1 // mm
 #define SCAN_DIST_TOLERANCE	100 //mm
 #define MEASURE_TOLERANCE	10 //mm
+#define MINFINEANGLE		0.7 //rad
+
 #define RED_AREA			200 // mm
 #define GREEN_AREA			300 //mm
 #define BLUE_AREA			400 //mm
-#define AREA_Y				-100 // mm
-#define SIDESTEP_DIST		100 // mm
-#define CYLINDER_RADIUS 	30 //mm
-#define ROBOT_R				37 // mm
-#define MINFINEANGLE		0.7 //rad
-#define PHOTO_DIST			200 //mm
-#define MIN_DIST			100 //mm
 
+//Static global robot structure to save most important values used in most functions
 typedef struct{
 	float pos_x;
 	float pos_y;
@@ -85,19 +93,35 @@ typedef struct{
 
 static robot_t robot;
 
+void robot_init(void){
+	robot.pos_x = 0;
+	robot.pos_y = 0;
+	robot.angle = 0;
+	robot.motor_state = STOP;
+	robot.progress = 0;
+	robot.calibrated = FALSE;
+}
+
+//Static global cylinder structure to save most important values used in most functions
 typedef struct {
 	uint16_t pos_x;
 	uint16_t pos_y;
-	colors_detected_t color;
 } cylinder_t;
 
 static cylinder_t cylinder;
 
+void cylinder_init(void){
+	cylinder.pos_x = 0;
+	cylinder.pos_y = 0;
+}
 
+//Calculate the rotation done by the robot since the last call of the function
 float get_angle(void){
 	return ((float)(right_motor_get_pos()*2*WHEEL_PERIMETER)/(float)(WHEEL_DISTANCE*NSTEP_ONE_TURN));
 }
 
+
+//Update x/y position and angle of the robot based on the steps done by the motors
 void new_coord_and_angle(void){
 	switch(robot.motor_state){
 	case ROTATION:
@@ -116,6 +140,7 @@ void new_coord_and_angle(void){
 	left_motor_set_pos(0);
 }
 
+//Set the motors to a certain speed, either straight movement or rotation on spot (or Stop).
 void set_motors(motors_state_t motors_state, int speed){
 	//new_coord_and_angle();
 	switch(motors_state){
@@ -137,9 +162,10 @@ void set_motors(motors_state_t motors_state, int speed){
 	}
 }
 
+//Calculate the x position the robot needs after Positioning
 uint16_t calculate_positioning(void) {
 	uint16_t area_x = 0;
-	switch(cylinder.color) {
+	switch(get_color()) {
 		case RED:
 			area_x = RED_AREA;
 			break;
@@ -156,23 +182,10 @@ uint16_t calculate_positioning(void) {
 	return (cylinder.pos_x + (float)((SIDESTEP_DIST)*(cylinder.pos_x - area_x))/(float)(cylinder.pos_y - AREA_Y));
 }
 
-bool orientation(float target_angle){
-	if(robot.angle > target_angle+ANGLE_TOLERANCE)
-	{
-		set_motors(ROTATION, -ROTATION_SPEED);
-		return 0;
-	}
-	else if(robot.angle < target_angle-ANGLE_TOLERANCE)
-	{
-		set_motors(ROTATION, ROTATION_SPEED);
-		return 0;
-	}
-	return 1;
-}
-
+//Calculate the angle the robot needs for pushing the cylinder
 float calculate_target_angle(void) {
 	uint16_t area_x = 0;
-	switch(cylinder.color) {
+	switch(get_color()) {
 		case RED:
 			area_x = RED_AREA;
 			break;
@@ -189,6 +202,21 @@ float calculate_target_angle(void) {
 	return atanf((float)(cylinder.pos_x - area_x)/(float)(cylinder.pos_y - AREA_Y));
 }
 
+//Orient the robot to a certain angle, returns true if the orientation is reached
+bool orientation(float target_angle){
+	if(robot.angle > target_angle+ANGLE_TOLERANCE)
+	{
+		set_motors(ROTATION, -ROTATION_SPEED);
+		return FALSE;
+	}
+	else if(robot.angle < target_angle-ANGLE_TOLERANCE)
+	{
+		set_motors(ROTATION, ROTATION_SPEED);
+		return FALSE;
+	}
+	return TRUE;
+}
+
 static THD_WORKING_AREA(waPosControl, 350);
 static THD_FUNCTION(PosControl, arg) {
 
@@ -196,49 +224,38 @@ static THD_FUNCTION(PosControl, arg) {
     (void)arg;
 
     systime_t time;
-    static state_t state = WAIT;
-    static int scan_speed = SCAN_SPEED;
 
+    //Some variables needed only in this function
+    static state_t state = WAIT;
+
+    static int scan_speed = SCAN_SPEED;
     static uint16_t y_target = 0;
     static uint16_t x_target = 0;
     float target_angle = 0.;
-
     static float fineangle = 0;
 
-    //Robot init
-    robot.pos_x = 0;
-    robot.pos_y = 0;
-    robot.angle = 0;
-    robot.motor_state = STOP;
-    robot.progress = 0;
-    robot.calibrated = FALSE;
+    robot_init();
 
-    //Cylinder init
-    cylinder.pos_x = 0;
-    cylinder.pos_y = 0;
-    cylinder.color = NO_COLOR;
+    robot_init();
 
     while(1)
     {
 		time = chVTGetSystemTime();
 
+		//Start and Stop mechanism
 		if(get_selector() > 8 && state == WAIT)
 			state = CALIBRATION;
 
 		if(get_selector() < 8)
 		{
 			state = WAIT;
-			robot.pos_x = 0;
-			robot.pos_y = 0;
-			robot.angle = 0;
+			robot_init();
+			cylinder_init();
 			reset_color();
 			set_motors(STOP,0);
 			scan_speed = SCAN_SPEED;
 			fineangle = 0;
-			robot.progress = 0;
-			robot.calibrated = FALSE;
 		}
-
 
 		//Calculate new position
 		new_coord_and_angle();
@@ -253,6 +270,7 @@ static THD_FUNCTION(PosControl, arg) {
 			}
 		}
 
+		//State machine containing all the movements the robot has to complete
 		switch(state) {
 		case WAIT:
 			set_motors(STOP, 0);
@@ -262,7 +280,6 @@ static THD_FUNCTION(PosControl, arg) {
 			if(orientation(-PI/2.) && !robot.calibrated)
 			{
 				TOF_calibrate();
-				chprintf((BaseSequentialStream *)&SD3, "calibrated\n");
 				robot.calibrated = TRUE;
 			}
 			if(robot.calibrated && orientation(0.))
@@ -339,25 +356,26 @@ static THD_FUNCTION(PosControl, arg) {
 		case DETECT_COLOR:
 			if(orientation(fineangle))
 			{
+				//Calculate position of cylinder
+				if(cylinder.pos_y == 0 && cylinder.pos_x == 0)
+				{
+					//To increase precision and eliminate false measurements 2 similar measurements need to be provided before accepting
+					uint16_t dist = TOF_get_dist_mm();
+					TOF_wait_measure();
+					uint16_t dist2 = TOF_get_dist_mm();
+					while(dist2 > dist + MEASURE_TOLERANCE || dist2 < dist-MEASURE_TOLERANCE)
+					{
+						TOF_wait_measure();
+						dist = dist2;
+						dist2 = TOF_get_dist_mm();
+					}
+					dist = (dist + dist2)/2;
+					cylinder.pos_x = robot.pos_x + sin(robot.angle)*(float)(dist+CYLINDER_RADIUS);
+					cylinder.pos_y = robot.pos_y + cos(robot.angle)*(float)(dist+CYLINDER_RADIUS);
+				}
 				 if(TOF_get_dist_mm() < PHOTO_DIST)
 				{
-					if(cylinder.pos_y == 0 && cylinder.pos_x == 0) //Calculate position of cylinder
-					{
-						uint16_t dist = TOF_get_dist_mm();
-						TOF_wait_measure();
-						uint16_t dist2 = TOF_get_dist_mm();
-						while(dist2 > dist + MEASURE_TOLERANCE || dist2 < dist-MEASURE_TOLERANCE) //get 2 similar measurements
-						{
-							TOF_wait_measure();
-							dist = dist2;
-							dist2 = TOF_get_dist_mm();
-						}
-						dist = (dist + dist2)/2;
-						cylinder.pos_x = robot.pos_x + sin(robot.angle)*(float)(dist+CYLINDER_RADIUS);
-						cylinder.pos_y = robot.pos_y + cos(robot.angle)*(float)(dist+CYLINDER_RADIUS);
-					}
-
-					set_motors(STRAIGHT, -STRAIGHT_SPEED);
+ 					set_motors(STRAIGHT, -STRAIGHT_SPEED);
 				}
 				else
 				{
@@ -392,7 +410,6 @@ static THD_FUNCTION(PosControl, arg) {
 				{
 					set_motors(STOP, 0);
 					y_target = 0;
-					cylinder.color = get_color();
 					x_target = calculate_positioning();
 					state = POSITIONING;
 				}
@@ -483,7 +500,6 @@ static THD_FUNCTION(PosControl, arg) {
 		case DONE:
 		default:
 			;
-			break;
 		}
 
 		chThdSleepUntilWindowed(time, time + MS2ST(PERIOD));
@@ -525,7 +541,7 @@ static THD_FUNCTION(test, arg) {
 
 
 void pos_control_start(void){
-	chThdCreateStatic(waPosControl, sizeof(waPosControl), NORMALPRIO + 1, PosControl, NULL); // priorität apasse
+	chThdCreateStatic(waPosControl, sizeof(waPosControl), NORMALPRIO + 1, PosControl, NULL);
 }
 
 void testing_start(void){

@@ -10,14 +10,11 @@
 
 #define AVG_AREA 10
 
-//Blue seems to have generally rather low output values on the camera,
-//therefore we slightly increase the value to improve color recognition
-#define BLUE_CORRECTION_VALUE 1.
-
 //semaphore
 static BSEMAPHORE_DECL(image_ready_sem, TRUE);
 static BSEMAPHORE_DECL(take_img_sem, TRUE);
 
+//Global variable to save detected color
 static colors_detected_t detected_color = NO_COLOR;
 
 static THD_WORKING_AREA(waCaptureImage, 256);
@@ -26,8 +23,7 @@ static THD_FUNCTION(CaptureImage, arg) {
     chRegSetThreadName(__FUNCTION__);
     (void)arg;
 
-	//Takes pixels 0 to IMAGE_BUFFER_SIZE of the line 10 + 11 (minimum 2 lines because reasons)
-	po8030_advanced_config(FORMAT_RGB565, 0, 240, IMAGE_BUFFER_SIZE, 2, SUBSAMPLING_X1, SUBSAMPLING_X1);
+    po8030_advanced_config(FORMAT_RGB565, 0, 240, IMAGE_BUFFER_SIZE, 2, SUBSAMPLING_X1, SUBSAMPLING_X1);
 	dcmi_enable_double_buffering();
 	dcmi_set_capture_mode(CAPTURE_ONE_SHOT);
 	dcmi_prepare();
@@ -107,7 +103,6 @@ static THD_FUNCTION(ProcessImage, arg) {
 		red_mean /= AVG_AREA;
 		green_mean /= AVG_AREA;
 		blue_mean /= AVG_AREA;
-		blue_mean *= BLUE_CORRECTION_VALUE;
 
 		chprintf((BaseSequentialStream *)&SD3, "RGB %d %d %d\n", red_mean, green_mean, blue_mean);
 
