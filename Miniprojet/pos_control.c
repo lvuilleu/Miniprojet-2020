@@ -482,9 +482,12 @@ static THD_FUNCTION(PosControl, arg) {
 				{
 					set_motors(STOP,0);
 					robot.pos_y = 0;
+					robot.angle = angle_calibration();
+
 					reset_color();
 					scan_speed = SCAN_SPEED;
 					fineangle = 0;
+
 					cylinder_init();
 
 					robot.progress++;
