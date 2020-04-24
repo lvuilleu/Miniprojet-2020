@@ -236,7 +236,7 @@ static THD_FUNCTION(PosControl, arg) {
 
     robot_init();
 
-    robot_init();
+    cylinder_init();
 
     while(1)
     {
@@ -363,7 +363,7 @@ static THD_FUNCTION(PosControl, arg) {
 					uint16_t dist = TOF_get_dist_mm();
 					TOF_wait_measure();
 					uint16_t dist2 = TOF_get_dist_mm();
-					while(dist2 > dist + MEASURE_TOLERANCE || dist2 < dist-MEASURE_TOLERANCE)
+					while(dist2 > dist + MEASURE_TOLERANCE || dist2 < dist - MEASURE_TOLERANCE)
 					{
 						TOF_wait_measure();
 						dist = dist2;
@@ -373,7 +373,7 @@ static THD_FUNCTION(PosControl, arg) {
 					cylinder.pos_x = robot.pos_x + sin(robot.angle)*(float)(dist+CYLINDER_RADIUS);
 					cylinder.pos_y = robot.pos_y + cos(robot.angle)*(float)(dist+CYLINDER_RADIUS);
 				}
-				 if(TOF_get_dist_mm() < PHOTO_DIST)
+				if(TOF_get_dist_mm() < PHOTO_DIST)
 				{
  					set_motors(STRAIGHT, -STRAIGHT_SPEED);
 				}
@@ -485,8 +485,7 @@ static THD_FUNCTION(PosControl, arg) {
 					reset_color();
 					scan_speed = SCAN_SPEED;
 					fineangle = 0;
-					cylinder.pos_x = 0;
-					cylinder.pos_y = 0;
+					cylinder_init();
 
 					robot.progress++;
 					if(robot.progress >= 3)
