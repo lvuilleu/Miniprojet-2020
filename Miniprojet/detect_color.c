@@ -9,9 +9,12 @@
 
 #include <detect_color.h>
 
+
+
 #define AVG_AREA 10
 
 #define AVG_DIST			10
+#define BLUE_CORRECTION		1.5
 
 //#define LINE_WIDTH			5.  // mm
 //#define CALIBRATION_DIST	30. // mm
@@ -19,11 +22,13 @@
 #define TANVANGLE			0.41
 
 //semaphore
-static BSEMAPHORE_DECL(image_ready_sem, TRUE);
 static BSEMAPHORE_DECL(take_img_sem, TRUE);
+static BSEMAPHORE_DECL(image_ready_sem_color, TRUE);
+static BSEMAPHORE_DECL(image_ready_sem_center, TRUE);
 
 //Global variable to save detected color
 static colors_detected_t detected_color = NO_COLOR;
+static task_t task = NO_TASK;
 
 static THD_WORKING_AREA(waCaptureImage, 256);
 static THD_FUNCTION(CaptureImage, arg) {
@@ -43,7 +48,10 @@ static THD_FUNCTION(CaptureImage, arg) {
 		//waits for the capture to be done
 		wait_image_ready();
 		//signals an image has been captured
-		chBSemSignal(&image_ready_sem);
+		if(task == COLOR_DET)
+			chBSemSignal(&image_ready_sem_color);
+		if(task == CENTER_DET)
+			chBSemSignal(&image_ready_sem_center);
     }
 }
 
@@ -60,7 +68,7 @@ static THD_FUNCTION(ProcessImage, arg) {
 
     while(1){
     	//waits until an image has been captured
-        chBSemWait(&image_ready_sem);
+        chBSemWait(&image_ready_sem_color);
 		//gets the pointer to the array filled with the last image in RGB565
 		img_buff_ptr = dcmi_get_last_image_ptr();
 
@@ -112,6 +120,8 @@ static THD_FUNCTION(ProcessImage, arg) {
 		green_mean /= AVG_AREA;
 		blue_mean /= AVG_AREA;
 
+		blue_mean *= BLUE_CORRECTION;
+
 		chprintf((BaseSequentialStream *)&SD3, "RGB %d %d %d\n", red_mean, green_mean, blue_mean);
 
 		if(red_mean > green_mean && red_mean > blue_mean)
@@ -138,7 +148,8 @@ void process_image_start(void){
 	chThdCreateStatic(waCaptureImage, sizeof(waCaptureImage), NORMALPRIO, CaptureImage, NULL);
 }
 
-void take_image(void){
+void take_image(task_t newtask){
+	task = newtask;
 	chBSemSignal(&take_img_sem);
 	return;
 }
@@ -153,17 +164,16 @@ void reset_color(void){
 }
 
 float angle_correction(void) {
-	take_image();
+	take_image(CENTER_DET);
 
 	uint8_t *img_buff_ptr;
-	chBSemWait(&image_ready_sem);
-
+	chBSemWait(&image_ready_sem_center);
 	img_buff_ptr = dcmi_get_last_image_ptr();
-
 	uint8_t image[IMAGE_BUFFER_SIZE] = {0};
-	uint8_t filtered_image[IMAGE_BUFFER_SIZE] = {0};
+	uint8_t tempavg[AVG_DIST/2+1] = {0};
 	uint32_t average = 0;
 
+	//read values
 	for(uint16_t i = 0; i < IMAGE_BUFFER_SIZE; i++)
 	{
 		// red is used
@@ -172,29 +182,36 @@ float angle_correction(void) {
 	}
 	average /= IMAGE_BUFFER_SIZE;
 
-	// Average filtering
-	// evtl. luege ob es nötig isch
-	for(int16_t i = 0; i < IMAGE_BUFFER_SIZE; i++)
+	// Average filtering over AVG_DIST+1 value (11 values)
+	uint16_t avg = (AVG_DIST/2+2)*image[0]+image[1]+image[2]+image[3]+image[4];
+	for(int i = 0; i <= AVG_DIST/2; i++)
 	{
-		uint16_t temp = 0;
-		uint16_t values = 0;
-		for(int16_t j = i - AVG_DIST/2; j <= i + AVG_DIST/2; j++)
-		{
-			if(j >= 0 && j < IMAGE_BUFFER_SIZE)
-			{
-				temp += image[j];
-				values++;
-			}
-		}
-		filtered_image[i] = temp/values; // conversion from 16 to 8bits, hoffentlech funktionierts
+		tempavg[i] = image[0];
 	}
 
+	for(int16_t i = 0; i < IMAGE_BUFFER_SIZE; i++)
+	{
+		for(int j = 0; j < AVG_DIST/2; j++)
+			tempavg[j] = tempavg[j+1];
+		tempavg[AVG_DIST/2] = image[i];
+
+		if(i < IMAGE_BUFFER_SIZE-AVG_DIST/2)
+			avg += image[i+AVG_DIST/2];
+		else
+			avg += image[IMAGE_BUFFER_SIZE-1];
+
+		avg -= tempavg[0];
+
+		image[i] = avg/(AVG_DIST+1);
+	}
+
+	//Line detection
 	uint16_t count = 0;
 	uint16_t max_count = 0;
 	uint16_t middle = 0;
 	for(uint16_t i = 0 ; i < IMAGE_BUFFER_SIZE ; i++)
 	{
-		if(filtered_image[i] < average)
+		if(image[i] < average)
 			count++;
 		else
 		{
@@ -208,13 +225,12 @@ float angle_correction(void) {
 	}
 
 	// conversion from pixels to mm
+	//Independent of distance to the wall
+	chprintf((BaseSequentialStream *)&SD3, "middle = %d\n", middle);
 	float offset = (float)(middle - IMAGE_BUFFER_SIZE/2)/(float)(IMAGE_BUFFER_SIZE/2);
-
-	//float offset = (float)(middle - IMAGE_BUFFER_SIZE)/(float)(IMAGE_BUFFER_SIZE)*IMAGE_WIDTH; // siehe defines
-	//float offset = (float)(middle - IMAGE_BUFFER_SIZE)/(float)(max_count)*LINE_WIDTH; //angeri variante, max_count
-																			// isch aber evtl. unzueverlässig
-
+	chprintf((BaseSequentialStream *)&SD3, "offset = %f\n", offset);
+	//Conversion to correction angle
 	offset = atanf(TANVANGLE*offset);
 
-	return M_PI + offset;
+	return M_PI - offset;
 }

@@ -217,7 +217,7 @@ bool orientation(float target_angle){
 	return TRUE;
 }
 
-static THD_WORKING_AREA(waPosControl, 512);
+static THD_WORKING_AREA(waPosControl, 1024);
 static THD_FUNCTION(PosControl, arg) {
 
     chRegSetThreadName(__FUNCTION__);
@@ -233,6 +233,7 @@ static THD_FUNCTION(PosControl, arg) {
     static uint16_t x_target = 0;
     float target_angle = 0.;
     static float fineangle = 0;
+    static bool acorrected = FALSE;
 
     robot_init();
 
@@ -255,6 +256,7 @@ static THD_FUNCTION(PosControl, arg) {
 			set_motors(STOP,0);
 			scan_speed = SCAN_SPEED;
 			fineangle = 0;
+			acorrected = FALSE;
 		}
 
 		//Calculate new position
@@ -383,7 +385,7 @@ static THD_FUNCTION(PosControl, arg) {
 				}
 				else
 				{
-					take_image();
+					take_image(COLOR_DET);
 					if(cylinder.pos_x - robot.pos_x > MIN_DIST)
 						state = SIDESTEP;
 					else
@@ -479,14 +481,16 @@ static THD_FUNCTION(PosControl, arg) {
 		case HOME_Y:
 			if(orientation(PI))
 			{
-				static bool acorrected = FALSE;
+				set_motors(STOP,0);
+				chThdSleepMilliseconds(1000);
 				if(!acorrected)
 				{
-					robot.angle = angle_correction();
+					float anglecorr = angle_correction();
+					chprintf((BaseSequentialStream *)&SD3, "anglecorr=%f\n", anglecorr);
+					robot.angle = anglecorr;
 					acorrected = TRUE;
 					break;
 				}
-
 				if(TOF_get_dist_mm() > (HOME_DIST + DIST_TOLERANCE))
 				set_motors(STRAIGHT, STRAIGHT_SPEED);
 
@@ -521,44 +525,6 @@ static THD_FUNCTION(PosControl, arg) {
 
 }
 
-static THD_WORKING_AREA(watest, 350);
-static THD_FUNCTION(test, arg) {
-
-    chRegSetThreadName(__FUNCTION__);
-    (void)arg;
-
-    float angle= 0;
-
-    while(angle < 10. * PI){
-    	right_motor_set_pos(0);
-    	left_motor_set_pos(0);
-
-    	chThdSleepMilliseconds(10);
-
-    	if(get_selector() > 8)
-    	{
-    		chThdSleepMilliseconds(10);
-    		chprintf((BaseSequentialStream *)&SD3, "Pause \n");
-    		continue;
-    	}
-    	set_motors(ROTATION, ROTATION_SPEED);
-    	angle += get_angle();
-    	chprintf((BaseSequentialStream *)&SD3, "angle = %f\n", angle);
-    	if(angle > 10* PI)
-    	{
-    		set_motors(STOP, 0);
-    	}
-
-
-    }
-}
-
-
 void pos_control_start(void){
 	chThdCreateStatic(waPosControl, sizeof(waPosControl), NORMALPRIO + 1, PosControl, NULL);
 }
-
-void testing_start(void){
-	chThdCreateStatic(watest, sizeof(watest), NORMALPRIO + 1, test, NULL);
-}
-
