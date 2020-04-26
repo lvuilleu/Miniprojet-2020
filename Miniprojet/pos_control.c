@@ -217,7 +217,7 @@ bool orientation(float target_angle){
 	return TRUE;
 }
 
-static THD_WORKING_AREA(waPosControl, 350);
+static THD_WORKING_AREA(waPosControl, 512);
 static THD_FUNCTION(PosControl, arg) {
 
     chRegSetThreadName(__FUNCTION__);
@@ -290,6 +290,10 @@ static THD_FUNCTION(PosControl, arg) {
 			break;
 
 		case SCAN:
+			//For testing only //////
+			if(robot.progress)
+				orientation(0);
+			//////
 			;
 			uint16_t measure1 = TOF_get_dist_mm();
 			if(measure1 < SCAN_DIST && robot.angle < PI/2.)
@@ -475,6 +479,14 @@ static THD_FUNCTION(PosControl, arg) {
 		case HOME_Y:
 			if(orientation(PI))
 			{
+				static bool acorrected = FALSE;
+				if(!acorrected)
+				{
+					robot.angle = angle_correction();
+					acorrected = TRUE;
+					break;
+				}
+
 				if(TOF_get_dist_mm() > (HOME_DIST + DIST_TOLERANCE))
 				set_motors(STRAIGHT, STRAIGHT_SPEED);
 
@@ -482,11 +494,11 @@ static THD_FUNCTION(PosControl, arg) {
 				{
 					set_motors(STOP,0);
 					robot.pos_y = 0;
-					robot.angle = angle_calibration();
 
 					reset_color();
 					scan_speed = SCAN_SPEED;
 					fineangle = 0;
+					acorrected = FALSE;
 
 					cylinder_init();
 

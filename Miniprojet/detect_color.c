@@ -11,11 +11,12 @@
 
 #define AVG_AREA 10
 
-#define AVG_DIST				10
+#define AVG_DIST			10
 
-#define LINE_WIDTH			5.  // mm
-#define CALIBRATION_DIST		30. // mm
-#define IMAGE_WIDTH			50. //mm  at 30mm distance to target  -> muess me nachemässe (mitem TP4) oder haut LINE_WIDTH
+//#define LINE_WIDTH			5.  // mm
+//#define CALIBRATION_DIST	30. // mm
+//#define IMAGE_WIDTH			50. //mm  at 30mm distance to target  -> muess me nachemässe (mitem TP4) oder haut LINE_WIDTH
+#define TANVANGLE			0.41
 
 //semaphore
 static BSEMAPHORE_DECL(image_ready_sem, TRUE);
@@ -151,9 +152,9 @@ void reset_color(void){
 	return;
 }
 
-// isch nid unbedingt nötig, chöi mer o la si
-// wenn denn strich male u defines bestimme (evtl. mit TP4)
-float angle_calibration(void) {
+float angle_correction(void) {
+	take_image();
+
 	uint8_t *img_buff_ptr;
 	chBSemWait(&image_ready_sem);
 
@@ -207,11 +208,13 @@ float angle_calibration(void) {
 	}
 
 	// conversion from pixels to mm
-	float offset = (float)(middle - IMAGE_BUFFER_SIZE)/(float)(IMAGE_BUFFER_SIZE)*IMAGE_WIDTH; // siehe defines
+	float offset = (float)(middle - IMAGE_BUFFER_SIZE/2)/(float)(IMAGE_BUFFER_SIZE/2);
+
+	//float offset = (float)(middle - IMAGE_BUFFER_SIZE)/(float)(IMAGE_BUFFER_SIZE)*IMAGE_WIDTH; // siehe defines
 	//float offset = (float)(middle - IMAGE_BUFFER_SIZE)/(float)(max_count)*LINE_WIDTH; //angeri variante, max_count
 																			// isch aber evtl. unzueverlässig
 
-	float correction = atanf(offset/CALIBRATION_DIST);
+	offset = atanf(TANVANGLE*offset);
 
-	return M_PI + correction;
+	return M_PI + offset;
 }

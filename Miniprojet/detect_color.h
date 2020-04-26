@@ -15,6 +15,6 @@ void take_image(void);
 colors_detected_t get_color(void);
 void reset_color(void);
 
-float angle_calibration(void);
+float angle_correction(void);
 
 #endif
