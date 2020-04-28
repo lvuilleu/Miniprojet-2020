@@ -14,12 +14,16 @@
 #define AVG_AREA 10
 
 #define AVG_DIST			10
-#define BLUE_CORRECTION		1.5
+#define RED_CORRECTION		1.2
+#define GREEN_CORRECTION	0.8
+#define BLUE_CORRECTION		1.2
+
 
 //#define LINE_WIDTH			5.  // mm
 //#define CALIBRATION_DIST	30. // mm
 //#define IMAGE_WIDTH			50. //mm  at 30mm distance to target  -> muess me nachemässe (mitem TP4) oder haut LINE_WIDTH
 #define TANVANGLE			0.41
+#define EMPIRIC_CORR		0.5
 
 //semaphore
 static BSEMAPHORE_DECL(take_img_sem, TRUE);
@@ -120,7 +124,10 @@ static THD_FUNCTION(ProcessImage, arg) {
 		green_mean /= AVG_AREA;
 		blue_mean /= AVG_AREA;
 
+		red_mean *= RED_CORRECTION;
+		green_mean *= GREEN_CORRECTION;
 		blue_mean *= BLUE_CORRECTION;
+
 
 		chprintf((BaseSequentialStream *)&SD3, "RGB %d %d %d\n", red_mean, green_mean, blue_mean);
 
@@ -182,6 +189,11 @@ float angle_correction(void) {
 	}
 	average /= IMAGE_BUFFER_SIZE;
 
+	if(average > image[0])
+		average = image[0];
+	if(average > image[IMAGE_BUFFER_SIZE-1])
+		average = image[IMAGE_BUFFER_SIZE-1];
+
 	// Average filtering over AVG_DIST+1 value (11 values)
 	uint16_t avg = (AVG_DIST/2+2)*image[0]+image[1]+image[2]+image[3]+image[4];
 	for(int i = 0; i <= AVG_DIST/2; i++)
@@ -230,7 +242,7 @@ float angle_correction(void) {
 	float offset = (float)(middle - IMAGE_BUFFER_SIZE/2)/(float)(IMAGE_BUFFER_SIZE/2);
 	chprintf((BaseSequentialStream *)&SD3, "offset = %f\n", offset);
 	//Conversion to correction angle
-	offset = atanf(TANVANGLE*offset);
+	offset = atanf(TANVANGLE*offset)*EMPIRIC_CORR;
 
-	return M_PI - offset;
+	return M_PI + offset;
 }

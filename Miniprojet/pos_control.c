@@ -71,7 +71,7 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define STRAIGHT_SPEED		500 // steps/s
 #define SCAN_SPEED			200 //steps/s
 
-#define ANGLE_TOLERANCE		0.02 // -> 0.57Â°
+#define ANGLE_TOLERANCE		0.015 // -> 1.14°
 #define DIST_TOLERANCE		1 // mm
 #define SCAN_DIST_TOLERANCE	100 //mm
 #define MEASURE_TOLERANCE	10 //mm
@@ -292,10 +292,6 @@ static THD_FUNCTION(PosControl, arg) {
 			break;
 
 		case SCAN:
-			//For testing only //////
-			if(robot.progress)
-				orientation(0);
-			//////
 			;
 			uint16_t measure1 = TOF_get_dist_mm();
 			if(measure1 < SCAN_DIST && robot.angle < PI/2.)
@@ -482,9 +478,10 @@ static THD_FUNCTION(PosControl, arg) {
 			if(orientation(PI))
 			{
 				set_motors(STOP,0);
-				chThdSleepMilliseconds(1000);
+
 				if(!acorrected)
 				{
+					chThdSleepMilliseconds(500);
 					float anglecorr = angle_correction();
 					chprintf((BaseSequentialStream *)&SD3, "anglecorr=%f\n", anglecorr);
 					robot.angle = anglecorr;
