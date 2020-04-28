@@ -10,7 +10,6 @@
 
 #include <math.h>
 
-
 #include <pos_control.h>
 #include <motors.h>
 #include <tof.h>
@@ -223,7 +222,7 @@ static THD_FUNCTION(PosControl, arg) {
     chRegSetThreadName(__FUNCTION__);
     (void)arg;
 
-    systime_t time;
+    static systime_t time;
 
     //Some variables needed only in this function
     static state_t state = WAIT;
@@ -231,7 +230,7 @@ static THD_FUNCTION(PosControl, arg) {
     static int scan_speed = SCAN_SPEED;
     static uint16_t y_target = 0;
     static uint16_t x_target = 0;
-    float target_angle = 0.;
+    static float target_angle = 0.;
     static float fineangle = 0;
     static bool acorrected = FALSE;
 

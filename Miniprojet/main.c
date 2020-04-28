@@ -1,5 +1,9 @@
 //chprintf((BaseSequentialStream *)&SD3, "dist=%d mm\n", dist);
 
+/* ToDO
+ * Printfcommands useneh & library
+ */
+
 
 #include <stdio.h>
 #include <stdlib.h>

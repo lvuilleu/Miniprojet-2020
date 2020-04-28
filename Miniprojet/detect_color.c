@@ -1,7 +1,7 @@
 #include "ch.h"
 #include "hal.h"
-#include <chprintf.h>
 #include <usbcfg.h>
+#include <chprintf.h>
 #include <math.h>
 
 #include <main.h>
@@ -18,10 +18,6 @@
 #define GREEN_CORRECTION	0.8
 #define BLUE_CORRECTION		1.2
 
-
-//#define LINE_WIDTH			5.  // mm
-//#define CALIBRATION_DIST	30. // mm
-//#define IMAGE_WIDTH			50. //mm  at 30mm distance to target  -> muess me nachemässe (mitem TP4) oder haut LINE_WIDTH
 #define TANVANGLE			0.41
 #define EMPIRIC_CORR		0.5
 
@@ -78,7 +74,7 @@ static THD_FUNCTION(ProcessImage, arg) {
 
 		//Read Image, we only treat the 10 centered values
 		//Red values
-		for(int i = 0; i < AVG_AREA; i++)
+		for(uint16_t i = 0; i < AVG_AREA; i++)
 		{
 			uint8_t temp = 0;
 			temp = *(img_buff_ptr+2*i+IMAGE_BUFFER_SIZE-AVG_AREA);
@@ -88,7 +84,7 @@ static THD_FUNCTION(ProcessImage, arg) {
 			red_image[i] = temp;
 		}
 		//Green values
-		for(int i = 0; i < AVG_AREA; i++)
+		for(uint16_t i = 0; i < AVG_AREA; i++)
 		{
 			uint8_t temp = 0;
 			temp = *(img_buff_ptr+2*i+IMAGE_BUFFER_SIZE-AVG_AREA);
@@ -101,7 +97,7 @@ static THD_FUNCTION(ProcessImage, arg) {
 			green_image[i] = temp;
 		}
 		//Blue Values
-		for(int i = 0; i < AVG_AREA; i++)
+		for(uint16_t i = 0; i < AVG_AREA; i++)
 		{
 			uint8_t temp = 0;
 			temp = *(img_buff_ptr+2*i+1+IMAGE_BUFFER_SIZE-AVG_AREA);
@@ -114,7 +110,7 @@ static THD_FUNCTION(ProcessImage, arg) {
 		uint16_t red_mean = 0;
 		uint16_t green_mean = 0;
 		uint16_t blue_mean = 0;
-		for(int i = 0; i < AVG_AREA; i++)
+		for(uint16_t i = 0; i < AVG_AREA; i++)
 		{
 			red_mean += red_image[i];
 			green_mean += green_image[i];
@@ -196,14 +192,14 @@ float angle_correction(void) {
 
 	// Average filtering over AVG_DIST+1 value (11 values)
 	uint16_t avg = (AVG_DIST/2+2)*image[0]+image[1]+image[2]+image[3]+image[4];
-	for(int i = 0; i <= AVG_DIST/2; i++)
+	for(uint8_t i = 0; i <= AVG_DIST/2; i++)
 	{
 		tempavg[i] = image[0];
 	}
 
 	for(int16_t i = 0; i < IMAGE_BUFFER_SIZE; i++)
 	{
-		for(int j = 0; j < AVG_DIST/2; j++)
+		for(uint8_t j = 0; j < AVG_DIST/2; j++)
 			tempavg[j] = tempavg[j+1];
 		tempavg[AVG_DIST/2] = image[i];
 
@@ -238,9 +234,7 @@ float angle_correction(void) {
 
 	// conversion from pixels to mm
 	//Independent of distance to the wall
-	chprintf((BaseSequentialStream *)&SD3, "middle = %d\n", middle);
 	float offset = (float)(middle - IMAGE_BUFFER_SIZE/2)/(float)(IMAGE_BUFFER_SIZE/2);
-	chprintf((BaseSequentialStream *)&SD3, "offset = %f\n", offset);
 	//Conversion to correction angle
 	offset = atanf(TANVANGLE*offset)*EMPIRIC_CORR;
 
