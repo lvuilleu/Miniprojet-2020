@@ -58,7 +58,6 @@ int main(void)
 	//init pos_control
 	motors_init();
 	pos_control_start();
-	//testing_start();
 
 	//Start SPI comm for RGB control
 	spi_comm_start();
