@@ -9,13 +9,11 @@
 #define TOF_H_
 
 #define HOME_DIST 80
-#define MEASURE_PERIOD 50
 
 void TOF_start(void);
 
 uint16_t TOF_get_dist_mm(void);
+uint16_t TOF_get_verified_measure(uint16_t tolerance);
 void TOF_calibrate(void);
-void TOF_wait_measure(void);
-
 
 #endif /* TOF_H_ */

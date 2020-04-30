@@ -70,15 +70,16 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define STRAIGHT_SPEED		500 // steps/s
 #define SCAN_SPEED			200 //steps/s
 
-#define ANGLE_TOLERANCE		0.015 // -> 1.14∞
-#define DIST_TOLERANCE		1 // mm
-#define SCAN_DIST_TOLERANCE	100 //mm
-#define MEASURE_TOLERANCE	10 //mm
-#define MINFINEANGLE		0.7 //rad
+#define ANGLE_TOLERANCE				0.015 // -> 1.14∞
+#define DIST_TOLERANCE				1 // mm
+#define SCAN_MEASURE_TOLERANCE		100 //mm
+#define COLOR_MEASURE_TOLERANCE		10 //mm
+#define MINFINEANGLE				0.7 //rad
 
 #define RED_AREA			200 // mm
 #define GREEN_AREA			300 //mm
 #define BLUE_AREA			400 //mm
+#define NO_COLOR_AREA		500 //mm
 
 //Static global robot structure to save most important values used in most functions
 typedef struct{
@@ -114,7 +115,7 @@ void cylinder_init(void){
 	cylinder.pos_y = 0;
 }
 
-//Calculate the rotation done by the robot since the last call of the function
+//Calculate the rotation done by the robot based on the motor steps counted
 float get_angle(void){
 	return ((float)(right_motor_get_pos()*2*WHEEL_PERIMETER)/(float)(WHEEL_DISTANCE*NSTEP_ONE_TURN));
 }
@@ -175,7 +176,7 @@ uint16_t calculate_positioning(void) {
 			area_x = BLUE_AREA;
 			break;
 		default:
-			;
+			area_x = NO_COLOR_AREA;
 	}
 
 	return (cylinder.pos_x + (float)((SIDESTEP_DIST)*(cylinder.pos_x - area_x))/(float)(cylinder.pos_y - AREA_Y));
@@ -242,7 +243,7 @@ static THD_FUNCTION(PosControl, arg) {
     {
 		time = chVTGetSystemTime();
 
-		//Start and Stop mechanism
+		//Start and Stop state machine
 		if(get_selector() > 8 && state == WAIT)
 			state = CALIBRATION;
 
@@ -261,6 +262,7 @@ static THD_FUNCTION(PosControl, arg) {
 		//Calculate new position
 		new_coord_and_angle();
 
+		//Debug notifications
 		if(DEBUG)
 		{
 			static systime_t oldtime= 0;
@@ -291,21 +293,15 @@ static THD_FUNCTION(PosControl, arg) {
 			break;
 
 		case SCAN:
-			;
-			uint16_t measure1 = TOF_get_dist_mm();
-			if(measure1 < SCAN_DIST && robot.angle < PI/2.)
+			if(TOF_get_verified_measure(SCAN_MEASURE_TOLERANCE) < SCAN_DIST && robot.angle < PI/2.)
 			{
-				TOF_wait_measure();
-				if((measure1 - TOF_get_dist_mm() > SCAN_DIST_TOLERANCE) || (TOF_get_dist_mm() - measure1 > SCAN_DIST_TOLERANCE))
-					;
-				else
-					state = APPROACH;
+				state = APPROACH;
 			}
 			else
 			{
-				if(robot.angle > PI/2.)
+				if(robot.angle > PI/2. - ANGLE_TOLERANCE)
 					scan_speed = -SCAN_SPEED;
-				if(robot.angle < 0)
+				if(robot.angle < 0 + ANGLE_TOLERANCE)
 					scan_speed = SCAN_SPEED;
 				set_motors(ROTATION, scan_speed);
 			}
@@ -348,8 +344,9 @@ static THD_FUNCTION(PosControl, arg) {
 			else
 			{
 				set_motors(STOP, 0);
+				//Add the 2 angles and divide by 2 to get center angle
 				fineangle += robot.angle;
-				fineangle /= 2.; //Add the 2 angles and div by 2 to get middle angle
+				fineangle /= 2.;
 				state = DETECT_COLOR;
 			}
 			break;
@@ -360,20 +357,12 @@ static THD_FUNCTION(PosControl, arg) {
 				//Calculate position of cylinder
 				if(cylinder.pos_y == 0 && cylinder.pos_x == 0)
 				{
-					//To increase precision and eliminate false measurements 2 similar measurements need to be provided before accepting
-					uint16_t dist = TOF_get_dist_mm();
-					TOF_wait_measure();
-					uint16_t dist2 = TOF_get_dist_mm();
-					while(dist2 > dist + MEASURE_TOLERANCE || dist2 < dist - MEASURE_TOLERANCE)
-					{
-						TOF_wait_measure();
-						dist = dist2;
-						dist2 = TOF_get_dist_mm();
-					}
-					dist = (dist + dist2)/2;
+					uint16_t dist = TOF_get_verified_measure(COLOR_MEASURE_TOLERANCE);
+
 					cylinder.pos_x = robot.pos_x + sin(robot.angle)*(float)(dist+CYLINDER_RADIUS);
 					cylinder.pos_y = robot.pos_y + cos(robot.angle)*(float)(dist+CYLINDER_RADIUS);
 				}
+				//Move to optimum distance for taking the image
 				if(TOF_get_dist_mm() < PHOTO_DIST)
 				{
  					set_motors(STRAIGHT, -STRAIGHT_SPEED);
@@ -425,9 +414,9 @@ static THD_FUNCTION(PosControl, arg) {
 				if(robot.pos_x < x_target + DIST_TOLERANCE && robot.pos_x > x_target - DIST_TOLERANCE)
 				{
 					set_motors(STOP, 0);
-					x_target = 0;		// nid unbedingt n√∂tig
-					target_angle = PI + calculate_target_angle(); // positive winkel
-					state = PUSH; ////////ADAPT
+					x_target = 0;
+					target_angle = PI + calculate_target_angle();
+					state = PUSH;
 				}
 				else if (x_target < robot.pos_x)
 					set_motors(STRAIGHT, -STRAIGHT_SPEED);

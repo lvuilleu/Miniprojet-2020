@@ -62,9 +62,6 @@ static THD_FUNCTION(ProcessImage, arg) {
     (void)arg;
 
 	uint8_t *img_buff_ptr;
-	uint8_t red_image[AVG_AREA] = {0};
-	uint8_t green_image[AVG_AREA] = {0};
-	uint8_t blue_image[AVG_AREA] = {0};
 
     while(1){
     	//waits until an image has been captured
@@ -72,54 +69,45 @@ static THD_FUNCTION(ProcessImage, arg) {
 		//gets the pointer to the array filled with the last image in RGB565
 		img_buff_ptr = dcmi_get_last_image_ptr();
 
-		//Read Image, we only treat the 10 centered values
+		//Read Image, we only treat the 10 centered values and take the average
+		//Mean values
+		uint16_t red_mean = 0;
+		uint16_t green_mean = 0;
+		uint16_t blue_mean = 0;
 		//Red values
 		for(uint16_t i = 0; i < AVG_AREA; i++)
 		{
 			uint8_t temp = 0;
 			temp = *(img_buff_ptr+2*i+IMAGE_BUFFER_SIZE-AVG_AREA);
-			//temp = *(img_buff_ptr+2*i+IMAGE_BUFFER_SIZE/2);
 			temp &= 0b11111000;
 			temp = temp>>3;
-			red_image[i] = temp;
+			red_mean += temp;
 		}
 		//Green values
 		for(uint16_t i = 0; i < AVG_AREA; i++)
 		{
 			uint8_t temp = 0;
 			temp = *(img_buff_ptr+2*i+IMAGE_BUFFER_SIZE-AVG_AREA);
-			//temp = *(img_buff_ptr+2*i+IMAGE_BUFFER_SIZE/2);
 			temp &= 0b00000111;
 			temp = temp<<3;
-
 			temp |= ((*(img_buff_ptr+2*i+1+IMAGE_BUFFER_SIZE-AVG_AREA)>>5) & 0b00000111);
-			//temp |= ((*(img_buff_ptr+2*i+1+IMAGE_BUFFER_SIZE/2)>>5) & 0b00000111);
-			green_image[i] = temp;
+			green_mean += temp;
 		}
 		//Blue Values
 		for(uint16_t i = 0; i < AVG_AREA; i++)
 		{
 			uint8_t temp = 0;
 			temp = *(img_buff_ptr+2*i+1+IMAGE_BUFFER_SIZE-AVG_AREA);
-			//temp = *(img_buff_ptr+2*i+1+IMAGE_BUFFER_SIZE/2);
 			temp &= 0b00011111;
-			blue_image[i] = temp;
+			blue_mean += temp;
 		}
 
-		//Mean values
-		uint16_t red_mean = 0;
-		uint16_t green_mean = 0;
-		uint16_t blue_mean = 0;
-		for(uint16_t i = 0; i < AVG_AREA; i++)
-		{
-			red_mean += red_image[i];
-			green_mean += green_image[i];
-			blue_mean += blue_image[i];
-		}
 		red_mean /= AVG_AREA;
 		green_mean /= AVG_AREA;
 		blue_mean /= AVG_AREA;
 
+		//Corrections for each color to optimize recognition
+		//These are empirical values determined over multiple runs of the program
 		red_mean *= RED_CORRECTION;
 		green_mean *= GREEN_CORRECTION;
 		blue_mean *= BLUE_CORRECTION;
@@ -147,7 +135,7 @@ static THD_FUNCTION(ProcessImage, arg) {
 }
 
 void process_image_start(void){
-	chThdCreateStatic(waProcessImage, sizeof(waProcessImage), NORMALPRIO, ProcessImage, NULL);
+	chThdCreateStatic(waProcessImage, sizeof(waProcessImage), NORMALPRIO-1, ProcessImage, NULL);
 	chThdCreateStatic(waCaptureImage, sizeof(waCaptureImage), NORMALPRIO, CaptureImage, NULL);
 }
 
@@ -232,7 +220,7 @@ float angle_correction(void) {
 		}
 	}
 
-	// conversion from pixels to mm
+	//Conversion from pixels to mm
 	//Independent of distance to the wall
 	float offset = (float)(middle - IMAGE_BUFFER_SIZE/2)/(float)(IMAGE_BUFFER_SIZE/2);
 	//Conversion to correction angle

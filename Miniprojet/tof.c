@@ -11,6 +11,7 @@
 #include "tof.h"
 
 #define CALIB_TOLERANCE 5
+#define MEASURE_PERIOD 50
 
 static BSEMAPHORE_DECL(measure_sem, TRUE);
 
@@ -66,21 +67,23 @@ uint16_t TOF_get_dist_mm(void) {
 //Since we had rather big differences of the measured values when restarting the robot we implemented a basic calibration
 //At the beginning of the program we face the wall which is at a distance of 80mm from the robot
 void TOF_calibrate(void){
-	uint16_t measure1 = TOF_get_dist_mm();
-	chBSemWait(&measure_sem);
-	uint16_t measure2 = TOF_get_dist_mm();
-	while(measure1 - measure2 > CALIB_TOLERANCE || measure2 - measure1 > CALIB_TOLERANCE)
-	{
-		measure1 = measure2;
-		chBSemWait(&measure_sem);
-		measure2 = TOF_get_dist_mm();
-	}
-	calibration_value = (measure1+measure2)/2 - HOME_DIST;
+
+	calibration_value = TOF_get_verified_measure(CALIB_TOLERANCE) - HOME_DIST;
 }
 
-void TOF_wait_measure(void){
-	//To deactivate Semaphore (we only rarely need multiple measurements at a time therefore it will probably still be activated)
+uint16_t TOF_get_verified_measure(uint16_t tolerance){
+	uint16_t measure;
+
+	//To deactivate Semaphore (we just rarely need a verified measurement therefore the semaphore will probably still be activated)
 	chBSemWait(&measure_sem);
-	//Wait for new measurement
-	chBSemWait(&measure_sem);
+
+	do
+	{
+		measure = dist_mm;
+		//Wait for new measurement
+		chBSemWait(&measure_sem);
+	}while(measure - dist_mm > tolerance || dist_mm - measure > tolerance);
+
+	return (measure + dist_mm)/2;
 }
+
