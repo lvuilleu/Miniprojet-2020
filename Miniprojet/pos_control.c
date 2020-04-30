@@ -285,7 +285,7 @@ static THD_FUNCTION(PosControl, arg) {
 
 		case SCAN:
 			//Since a verified measurement takes much more time we first verify if a cylinder is detected with a single measurement
-			//If a cylinder is detected it is verified using TOF_get_verified _measure
+			//If a cylinder is detected the measurement is verified using TOF_get_verified _measure
 			//Without this a single wrong measurement disturbs the whole process which would happen quite often
 			if(TOF_get_dist_mm() < SCAN_DIST && robot.angle < SCAN_MAX_ANGLE)
 			{
@@ -500,6 +500,8 @@ static THD_FUNCTION(PosControl, arg) {
 			break;
 
 		case DONE:
+			chThdSleepMilliseconds(1000);
+			break;
 		default:
 			;
 		}
