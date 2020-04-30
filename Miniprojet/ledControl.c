@@ -1,4 +1,9 @@
-//LED control functions
+/*
+ * ledControl.c
+ *
+ *  Created on: 2 Apr 2020
+ *      Author: Loik Vuilleumier & Tim Buergel
+ */
 
 #include "ch.h"
 #include "hal.h"

@@ -2,7 +2,7 @@
  * pos_control.c
  *
  *  Created on: 2 Apr 2020
- *      Author: loikvuilleumier
+ *      Author: Loik Vuilleumier & Tim Buergel
  */
 
 #include "ch.h"
@@ -16,8 +16,6 @@
 #include <detect_color.h>
 #include <selector.h>
 #include <main.h>
-
-#include <chprintf.h> //DEBUG ONLY
 
 typedef enum {
 	WAIT,
@@ -38,13 +36,12 @@ typedef enum {
 	DONE
 } state_t;
 
-typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_direction
+typedef enum {
 	STRAIGHT,
 	ROTATION,
 	STOP,
 } motors_state_t;
 
-#define DEBUG				0
 #define PI					3.1415926536f // or M_PI from math.h
 
 #define WHEEL_DISTANCE		55.5f    //mm
@@ -55,6 +52,9 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define ROBOT_R				37 // mm
 
 #define PERIOD				10 // 100 Hz
+
+#define SCAN_MAX_ANGLE		PI*9./20. //rad
+#define MINFINEANGLE				0.7 //rad
 
 #define SCAN_DIST			1000 // mm
 #define TOUCH_DIST			170 // mm
@@ -74,7 +74,6 @@ typedef enum { // evtl. CLKW and ACLKW rotation as states => scan_speed zu scan_
 #define DIST_TOLERANCE				1 // mm
 #define SCAN_MEASURE_TOLERANCE		100 //mm
 #define COLOR_MEASURE_TOLERANCE		10 //mm
-#define MINFINEANGLE				0.7 //rad
 
 #define RED_AREA			200 // mm
 #define GREEN_AREA			300 //mm
@@ -176,6 +175,7 @@ uint16_t calculate_positioning(void) {
 			area_x = BLUE_AREA;
 			break;
 		default:
+			//In case color recognition did not work
 			area_x = NO_COLOR_AREA;
 	}
 
@@ -196,13 +196,14 @@ float calculate_target_angle(void) {
 			area_x = BLUE_AREA;
 			break;
 		default:
-			;
+			//In case color recognition did not work
+			area_x = NO_COLOR_AREA;
 	}
 
 	return atanf((float)(cylinder.pos_x - area_x)/(float)(cylinder.pos_y - AREA_Y));
 }
 
-//Orient the robot to a certain angle, returns true if the orientation is reached
+//Turn the robot to a certain angle, returns true if the orientation is reached
 bool orientation(float target_angle){
 	if(robot.angle > target_angle+ANGLE_TOLERANCE)
 	{
@@ -262,18 +263,8 @@ static THD_FUNCTION(PosControl, arg) {
 		//Calculate new position
 		new_coord_and_angle();
 
-		//Debug notifications
-		if(DEBUG)
-		{
-			static systime_t oldtime= 0;
-			if((robot.angle || robot.pos_x || robot.pos_y) && time > oldtime+1e3)
-			{
-				chprintf((BaseSequentialStream *)&SD3, "state = %d, angle = %f, pos_x = %f, pos_y = %f\n", state, robot.angle, robot.pos_x, robot.pos_y);
-				oldtime = time;
-			}
-		}
-
 		//State machine containing all the movements the robot has to complete
+		//For details see report
 		switch(state) {
 		case WAIT:
 			set_motors(STOP, 0);
@@ -293,13 +284,21 @@ static THD_FUNCTION(PosControl, arg) {
 			break;
 
 		case SCAN:
-			if(TOF_get_verified_measure(SCAN_MEASURE_TOLERANCE) < SCAN_DIST && robot.angle < PI/2.)
+			//Since a verified measurement takes much more time we first verify if a cylinder is detected with a single measurement
+			//If a cylinder is detected it is verified using TOF_get_verified _measure
+			//Without this a single wrong measurement disturbs the whole process which would happen quite often
+			if(TOF_get_dist_mm() < SCAN_DIST && robot.angle < SCAN_MAX_ANGLE)
 			{
-				state = APPROACH;
+				set_motors(STOP, 0);
+				if(TOF_get_verified_measure(SCAN_MEASURE_TOLERANCE) < SCAN_DIST)
+					state = APPROACH;
+				else
+					set_motors(ROTATION, scan_speed);
+
 			}
 			else
 			{
-				if(robot.angle > PI/2. - ANGLE_TOLERANCE)
+				if(robot.angle > SCAN_MAX_ANGLE - ANGLE_TOLERANCE)
 					scan_speed = -SCAN_SPEED;
 				if(robot.angle < 0 + ANGLE_TOLERANCE)
 					scan_speed = SCAN_SPEED;
@@ -469,10 +468,10 @@ static THD_FUNCTION(PosControl, arg) {
 
 				if(!acorrected)
 				{
+					//Since the camera has a small delay we wait half a second
+					//This strongly improves the image quality and therefore also the measurement
 					chThdSleepMilliseconds(500);
-					float anglecorr = angle_correction();
-					chprintf((BaseSequentialStream *)&SD3, "anglecorr=%f\n", anglecorr);
-					robot.angle = anglecorr;
+					robot.angle = angle_correction();
 					acorrected = TRUE;
 					break;
 				}

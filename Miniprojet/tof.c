@@ -2,7 +2,7 @@
  * tof.c
  *
  *  Created on: 23 Apr 2020
- *      Author: loikvuilleumier
+ *      Author: Loik Vuilleumier & Tim Buergel
  */
 
 #include "ch.h"
@@ -19,7 +19,7 @@ static uint16_t dist_mm = 0;
 static uint16_t calibration_value = 0;
 
 //We need a distance measurement more often than every 100ms
-//Therefore we more or less copied the function from the e-puck2_main-processor and made some minor changes
+//Therefore we more or less copied the function from the e-puck2_main-processor and made some minor changes including reducing MEASUREMENT_PERIOD
 
 static THD_WORKING_AREA(waTOF_Thd, 512);
 static THD_FUNCTION(TOF_Thd, arg) {
@@ -41,7 +41,6 @@ static THD_FUNCTION(TOF_Thd, arg) {
 		VL53L0X_startMeasure(&device, VL53L0X_DEVICEMODE_CONTINUOUS_RANGING);
 	}
 
-    //while (chThdShouldTerminateX() == false) {
 	while(1)
 	{
     	VL53L0X_getLastMeasure(&device);

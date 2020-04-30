@@ -4,6 +4,12 @@
  * Printfcommands useneh & library
  */
 
+/*
+ * main.c
+ *
+ *  Created on: 31.03.2020
+ *      Author: Loik Vuilleumier & Tim Buergel
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,7 +23,6 @@
 #include <main.h>
 #include <motors.h>
 #include <camera/po8030.h>
-#include <chprintf.h>
 #include <tof.h>
 #include <leds.h>
 #include <spi_comm.h>
@@ -26,6 +31,7 @@
 #include <ledControl.h>
 #include <pos_control.h>
 
+/*
 static void serial_start(void)
 {
 	static SerialConfig ser_cfg = {
@@ -36,7 +42,7 @@ static void serial_start(void)
 	};
 
 	sdStart(&SD3, &ser_cfg); // UART3.
-}
+}*/
 
 int main(void)
 {
@@ -46,7 +52,7 @@ int main(void)
     mpu_init();
 
     //starts the serial communication
-    serial_start();
+    //serial_start();
 
     //start the USB communication
     usb_start();
@@ -71,12 +77,7 @@ int main(void)
 
     /* Infinite loop. */
     while (1) {
-    	//take_image();
-    	//uint16_t dist = TOF_get_dist_mm();
-    	//chprintf((BaseSequentialStream *)&SD3, "dist=%d mm\n", dist);
         chThdSleepMilliseconds(1000);
-        //chprintf((BaseSequentialStream *)&SD3, "Colour=%d\n", get_color());
-        //chThdSleepMilliseconds(100);
     }
 }
 

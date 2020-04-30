@@ -2,7 +2,7 @@
  * main.h
  *
  *  Created on: 31.03.2020
- *      Author: Tim B�rgel
+ *      Author: Loik Vuilleumier & Tim Buergel
  */
 
 #ifndef MAIN_H_
@@ -19,8 +19,5 @@
 extern messagebus_t bus;
 
 extern parameter_namespace_t parameter_root;
-
-void SendUint8ToComputer(uint8_t* data, uint16_t size);
-
 
 #endif /* MAIN_H_ */

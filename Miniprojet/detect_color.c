@@ -1,7 +1,13 @@
+/*
+ * detect_color.c
+ *
+ *  Created on: 2 Apr 2020
+ *      Author: Loik Vuilleumier & Tim Buergel
+ */
+
 #include "ch.h"
 #include "hal.h"
 #include <usbcfg.h>
-#include <chprintf.h>
 #include <math.h>
 
 #include <main.h>
@@ -55,7 +61,7 @@ static THD_FUNCTION(CaptureImage, arg) {
     }
 }
 
-static THD_WORKING_AREA(waProcessImage, 256);
+static THD_WORKING_AREA(waProcessImage, 100);
 static THD_FUNCTION(ProcessImage, arg) {
 
     chRegSetThreadName(__FUNCTION__);
@@ -111,9 +117,6 @@ static THD_FUNCTION(ProcessImage, arg) {
 		red_mean *= RED_CORRECTION;
 		green_mean *= GREEN_CORRECTION;
 		blue_mean *= BLUE_CORRECTION;
-
-
-		chprintf((BaseSequentialStream *)&SD3, "RGB %d %d %d\n", red_mean, green_mean, blue_mean);
 
 		if(red_mean > green_mean && red_mean > blue_mean)
 		{
