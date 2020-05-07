@@ -129,8 +129,8 @@ void new_coord_and_angle(void){
 	case STRAIGHT: ;
 		//Big errors if we use int due to rounding errors
 		float distance= ((float)right_motor_get_pos())/((float)NSTEP_ONE_TURN)*WHEEL_PERIMETER;
-		robot.pos_y += cos(robot.angle)*distance;
-		robot.pos_x += sin(robot.angle)*distance;
+		robot.pos_y += cosf(robot.angle)*distance;
+		robot.pos_x += sinf(robot.angle)*distance;
 		break;
 	case STOP:
 		break;
@@ -141,7 +141,6 @@ void new_coord_and_angle(void){
 
 //Set the motors to a certain speed, either straight movement or rotation on spot (or Stop).
 void set_motors(motors_state_t motors_state, int speed){
-	//new_coord_and_angle();
 	switch(motors_state){
 		case STRAIGHT:
 			right_motor_set_speed(speed);
@@ -358,8 +357,8 @@ static THD_FUNCTION(PosControl, arg) {
 				{
 					uint16_t dist = TOF_get_verified_measure(COLOR_MEASURE_TOLERANCE);
 
-					cylinder.pos_x = robot.pos_x + sin(robot.angle)*(float)(dist+CYLINDER_RADIUS);
-					cylinder.pos_y = robot.pos_y + cos(robot.angle)*(float)(dist+CYLINDER_RADIUS);
+					cylinder.pos_x = robot.pos_x + sinf(robot.angle)*(float)(dist+CYLINDER_RADIUS);
+					cylinder.pos_y = robot.pos_y + cosf(robot.angle)*(float)(dist+CYLINDER_RADIUS);
 				}
 				//Move to optimum distance for taking the image
 				if(TOF_get_dist_mm() < PHOTO_DIST)
@@ -427,7 +426,7 @@ static THD_FUNCTION(PosControl, arg) {
 		case PUSH:
 			if(orientation(target_angle))
 			{
-				if(robot.pos_y + (CYLINDER_RADIUS+ROBOT_R)*cos(robot.angle) <= AREA_Y)
+				if(robot.pos_y - (CYLINDER_RADIUS+ROBOT_R)*cosf(robot.angle - PI) <= AREA_Y)
 				{
 					set_motors(STOP, 0);
 					state = BACK_UP;
@@ -469,7 +468,7 @@ static THD_FUNCTION(PosControl, arg) {
 				if(!acorrected)
 				{
 					//Since the camera has a small delay we wait half a second
-					//This strongly improves the image quality and therefore also the measurement
+					//This strongly improves the image quality and therefore also the measurement precision
 					chThdSleepMilliseconds(500);
 					robot.angle = angle_correction();
 					acorrected = TRUE;
